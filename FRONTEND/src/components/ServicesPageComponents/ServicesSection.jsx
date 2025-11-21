@@ -6,7 +6,7 @@ import {
   FaCheckCircle,
   FaChartLine,
   FaChalkboardTeacher,
-  FaFlask,
+  FaMoneyBillWave,
   FaHome,
   FaMoneyCheckAlt,
 } from "react-icons/fa";
@@ -20,18 +20,20 @@ const services = [
     title: "In-Store Promotions",
     description:
       "Our in-store promotions are crafted to increase visibility, drive immediate sales, and build brand loyalty. We combine creativity with data-driven strategy to execute impactful retail campaigns. From interactive displays to personalized customer experiences, our focus is to turn foot traffic into loyal customers through strategic engagement and memorable interactions.",
-    images: ["/inStorePromo1.jpg"],
+    images: [
+      "/inStorePromo1.png",
+      "/inStorePromo2.jpg",
+      "/inStorePromo3.jpg",
+    ],
   },
   {
-    icon: <FaUsers />,
-    title: "Consumer Activation",
+    icon: <FaMoneyBillWave />,
+    title: "Retailer Payments",
     description:
-      "We bring brands to life through high-energy consumer activations that create strong emotional connections. Our team conceptualizes and manages experiential marketing campaigns that leave a lasting impression. From digital-to-field executions, we ensure every engagement reflects your brand’s story.",
+      "DBT (Direct bank Transfer) helps being Visibility and transparency to last mile for payments / reimbursements of incentives, Window Display and Bonuses to retailer and ensure end-to-end to satisfaction of all parties. Gratification to retailers for using their Window display spaces or off-invoice incentive has always been a subject of opacity and pilferage, leading to multiple disputes and retailer dissatisfaction. Now CPE bring the end-to-end services to ENROL, EDUCATE, INFORM, EVALUATE AND TRANSFER payments without any middlemen, delivering 100% accuracy and satisfaction using DBT (Direct bank transfer)",
     images: [
-      "/ConsumerActivation1.jpg",
-      "/ConsumerActivation2.png",
-      "/ConsumerActivation3.jpg",
-      "/ConsumerActivation4.jpg",
+      "/RetailerPayments1.jpg",
+      "/RetailerPayments2.jpg",
     ],
   },
   {
@@ -48,7 +50,7 @@ const services = [
       "Effective merchandising drives visibility and conversion. We optimize shelf arrangements, displays, and promotional placements to enhance consumer experience and brand recall.",
     images: [
       "/Merchandising1.jpg",
-      "/Merchandising2.png",
+      "/Merchandising2.jpg",
       "/Merchandising3.jpg",
       "/Merchandising4.jpg",
     ],
@@ -61,11 +63,16 @@ const services = [
     images: ["/Training1.jpg", "/Training2.jpg", "/Training3.jpg"],
   },
   {
-    icon: <FaFlask />,
-    title: "Wet Sampling",
+    icon: <FaUsers />,
+    title: "Consumer Activation",
     description:
-      "Help the brand reach the right consumer and Experience the quality of their product firsthand with a complimentary sample. This helps fecilitate the consumer to evaluate benefits and craftsmanship of your product and capture feedback.",
-    images: ["/WetSampling1.jpg", "/WetSampling2.jpg", "/WetSampling3.jpg"],
+      "We bring brands to life through high-energy consumer activations that create strong emotional connections. Our team conceptualizes and manages experiential marketing campaigns that leave a lasting impression. From digital-to-field executions, we ensure every engagement reflects your brand’s story.",
+    images: [
+      "/ConsumerActivation1.jpg",
+      "/ConsumerActivation2.jpg",
+      "/ConsumerActivation3.jpg",
+      "/ConsumerActivation4.jpg",
+    ],
   },
   {
     icon: <FaHome />,
@@ -84,7 +91,7 @@ const services = [
     title: "Payrolling",
     description:
       "Our payroll services ensure accurate and compliant salary management while allowing you to focus on business growth.",
-    image: "/payrolling.jpg",
+    image: "/payrollingtesting.jpg",
   },
 ];
 
@@ -114,16 +121,16 @@ const ServiceItem = ({ item, reversed }) => {
       className={`flex flex-col-reverse md:flex-row items-center gap-12 ${reversed ? "md:flex-row-reverse" : ""
         }`}
     >
-      {/* IMAGE (NO FLOAT ANIMATION) */}
+      {/* IMAGE */}
       <motion.div className="w-full md:w-1/2">
         <img
           src={images[currentIndex]}
           alt={item.title}
-          className="rounded-2xl shadow-lg border border-gray-700 object-cover w-full h-50 md:h-80"
+          className="rounded-2xl shadow-lg object-cover w-full h-50 md:h-80 border-2 border-black"
         />
       </motion.div>
 
-      {/* TEXT (NO FLOAT ANIMATION) */}
+      {/* TEXT */}
       <motion.div className="w-full md:w-1/2">
         <div className="flex items-center gap-4 mb-5">
           <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gray-800 border-4 border-red-600 text-3xl text-red-500">

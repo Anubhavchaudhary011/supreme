@@ -3,9 +3,8 @@ import { motion } from "framer-motion";
 
 const HeroSection = () => {
   const images = [
-    "/hero_img3.jpg",
-    "/hero_img4.jpg",
-    "/hero_img5.jpg",
+    "/hero_img1.png",
+    "/hero_img2.png",
   ];
 
   const [currentIndex, setCurrentIndex] = useState(0);

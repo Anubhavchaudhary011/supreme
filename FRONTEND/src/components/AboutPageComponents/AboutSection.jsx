@@ -16,7 +16,7 @@ const AboutSection = () => {
           <img
             src="/about_img1.jpg"
             alt="Who We Are"
-            className="rounded-2xl shadow-lg object-cover w-full h-80 md:h-[320px]"
+            className="rounded-2xl shadow-lg object-cover w-full h-80 md:h-[320px] border-2 border-[#44090a]"
           />
         </motion.div>
 
@@ -48,7 +48,7 @@ const AboutSection = () => {
           className="md:w-1/2"
         >
           <img
-            src="/about_img2.jpg"
+            src="/about_img2.png"
             alt="What We Do"
             className="rounded-2xl shadow-lg object-cover w-full h-80 md:h-[320px]"
           />

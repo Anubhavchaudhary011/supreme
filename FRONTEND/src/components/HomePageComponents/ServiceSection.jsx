@@ -6,7 +6,7 @@ import {
   FaCheckCircle,
   FaChartLine,
   FaChalkboardTeacher,
-  FaFlask,
+  FaMoneyBillWave,
   FaHome,
   FaMoneyCheckAlt,
   FaArrowRight,
@@ -21,10 +21,10 @@ const services = [
       "Boost brand visibility through interactive retail campaigns that drive engagement and conversions.",
   },
   {
-    icon: <FaUsers />,
-    title: "Consumer Activation",
+    icon: <FaMoneyBillWave />,
+    title: "Retailer Payments",
     description:
-      "Create memorable customer experiences with tailored activations that connect emotionally with your audience and inspire loyalty.",
+      "Ensure complete visibility and transparency in last-mile payments through Direct Bank Transfer (DBT) — covering incentives, window display, etc.",
   },
   {
     icon: <FaChartLine />,
@@ -45,10 +45,10 @@ const services = [
       "Comprehensive employee training programs designed to enhance productivity, skill development, and workplace efficiency.",
   },
   {
-    icon: <FaFlask />,
-    title: "Wet Sampling",
+    icon: <FaUsers />,
+    title: "Consumer Activation",
     description:
-      "Accurate and reliable wet sampling services to ensure consistent quality and compliance with industry standards.",
+      "Create memorable customer experiences with tailored activations that connect emotionally with your audience and inspire loyalty.",
   },
   {
     icon: <FaHome />,
@@ -104,7 +104,7 @@ const ServiceSection = () => {
             <div className="relative z-10 text-center mt-auto">
               <Link
                 to="/services"
-                state={{ openService: item.title }}  
+                state={{ openService: item.title }}
                 className="inline-flex items-center gap-1 text-red-500 hover:text-red-700 hover:underline text-sm font-medium transition-all"
               >
                 Read More <FaArrowRight className="text-xs mt-[2px]" />
