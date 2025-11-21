@@ -519,7 +519,7 @@ const careerApplicationSchema = new mongoose.Schema(
     fullName: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     phone: { type: String },
-    city: { type: String, required: true }, // ✅ Added city field
+    city: { type: String, required: true },
     resume: {
       data: Buffer,
       contentType: String,
@@ -529,7 +529,11 @@ const careerApplicationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// 🔥 FIX CORRUPTED INDEX PROBLEM
+careerApplicationSchema.index({ candidate: 1 }, { unique: false, sparse: false });
+
 export const CareerApplication = mongoose.model("CareerApplication", careerApplicationSchema);
+
 
 /* ===============================
    JOB SCHEMA
