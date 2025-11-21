@@ -4,6 +4,9 @@ import nodemailer from "nodemailer";
 /* ============================================================
    APPLY TO A JOB (Candidate)
 ============================================================ */
+/* ============================================================
+   APPLY TO A JOB (Candidate) — Nodemailer Removed
+============================================================ */
 export const applyToJob = async (req, res) => {
   console.log("BODY:", req.body);
   console.log("FILE:", req.file);
@@ -42,7 +45,7 @@ export const applyToJob = async (req, res) => {
         },
       });
 
-      await candidate.save(); // 🔥 ensure _id exists
+      await candidate.save();
     } else {
       candidate.fullName = fullName;
       candidate.phone = phone;
@@ -53,18 +56,14 @@ export const applyToJob = async (req, res) => {
         fileName: resumeFile.originalname,
       };
 
-      await candidate.save(); // 🔥 ensure updated candidate is saved
+      await candidate.save();
     }
 
-    // 🔥 FINAL CRITICAL CHECK
     if (!candidate?._id) {
-      console.error("❌ candidate._id is missing!", candidate);
       return res.status(500).json({
-        message: "Candidate creation failed. Please try again.",
+        message: "Candidate creation failed.",
       });
     }
-
-    console.log("Candidate ID:", candidate._id);
 
     // Prevent duplicate application
     const existingApp = await JobApplication.findOne({
@@ -77,7 +76,7 @@ export const applyToJob = async (req, res) => {
         .status(400)
         .json({ message: "You have already applied for this job." });
 
-    // Create application (❌ fix: never let candidate=null)
+    // Create new application
     const newApplication = await JobApplication.create({
       candidate: candidate._id,
       job: job._id,
@@ -86,48 +85,21 @@ export const applyToJob = async (req, res) => {
       currentRound: 0,
     });
 
-    // EMAIL SENDING
-    const htmlContent = `
-      <h2>Application Submitted Successfully</h2>
-      <p>Dear ${fullName},</p>
-      <p>Thank you for applying for the position of <strong>${job.title}</strong>.</p>
-      <p>Your resume has been securely stored in our system.</p>
-      <p><strong>City:</strong> ${city}</p>
-      <p><strong>Status:</strong> Pending</p>
-      <br/>
-      <p>Best regards,<br/>HR Team</p>
-    `;
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"Career Portal" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: `Application Received for ${job.title}`,
-      html: htmlContent,
-    });
-
-    console.log(`📧 Email sent to ${email}`);
-
-    res.status(201).json({
+    // SUCCESS RESPONSE WITHOUT EMAIL
+    return res.status(201).json({
       message: "Application submitted successfully.",
       applicationId: newApplication._id,
     });
 
   } catch (err) {
     console.error("❌ Error in applyToJob:", err);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Internal server error",
       error: err.message,
     });
   }
 };
+;
 
 
 /* ============================================================
