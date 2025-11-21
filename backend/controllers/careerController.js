@@ -12,7 +12,7 @@ export const applyToJob = async (req, res) => {
     const { fullName, email, phone, city, coverLetter, jobId } = req.body;
     const resumeFile = req.file;
 
-    // Validate
+    // Basic validation
     if (!fullName || !email || !jobId)
       return res.status(400).json({
         message: "Full name, email, and job ID are required",
@@ -21,18 +21,16 @@ export const applyToJob = async (req, res) => {
     if (!resumeFile)
       return res.status(400).json({ message: "Resume file is required" });
 
-    // Check job exists
+    // Fetch job
     const job = await Job.findById(jobId);
     if (!job || !job.isActive)
-      return res
-        .status(404)
-        .json({ message: "Job not found or inactive" });
+      return res.status(404).json({ message: "Job not found or inactive" });
 
     // Create or update candidate
     let candidate = await CareerApplication.findOne({ email });
 
     if (!candidate) {
-      candidate = await CareerApplication.create({
+      candidate = new CareerApplication({
         fullName,
         email,
         phone,
@@ -43,21 +41,32 @@ export const applyToJob = async (req, res) => {
           fileName: resumeFile.originalname,
         },
       });
+
+      await candidate.save(); // 🔥 ensure _id exists
     } else {
-      Object.assign(candidate, {
-        fullName,
-        phone,
-        city,
-        resume: {
-          data: resumeFile.buffer,
-          contentType: resumeFile.mimetype,
-          fileName: resumeFile.originalname,
-        },
-      });
-      await candidate.save();
+      candidate.fullName = fullName;
+      candidate.phone = phone;
+      candidate.city = city;
+      candidate.resume = {
+        data: resumeFile.buffer,
+        contentType: resumeFile.mimetype,
+        fileName: resumeFile.originalname,
+      };
+
+      await candidate.save(); // 🔥 ensure updated candidate is saved
     }
 
-    // Prevent duplicate job applications
+    // 🔥 FINAL CRITICAL CHECK
+    if (!candidate?._id) {
+      console.error("❌ candidate._id is missing!", candidate);
+      return res.status(500).json({
+        message: "Candidate creation failed. Please try again.",
+      });
+    }
+
+    console.log("Candidate ID:", candidate._id);
+
+    // Prevent duplicate application
     const existingApp = await JobApplication.findOne({
       candidate: candidate._id,
       job: job._id,
@@ -68,7 +77,7 @@ export const applyToJob = async (req, res) => {
         .status(400)
         .json({ message: "You have already applied for this job." });
 
-    // Create new record
+    // Create application (❌ fix: never let candidate=null)
     const newApplication = await JobApplication.create({
       candidate: candidate._id,
       job: job._id,
@@ -77,14 +86,12 @@ export const applyToJob = async (req, res) => {
       currentRound: 0,
     });
 
-    /* ==========================
-       SEND EMAIL USING NODEMAILER
-    ========================== */
+    // EMAIL SENDING
     const htmlContent = `
       <h2>Application Submitted Successfully</h2>
       <p>Dear ${fullName},</p>
       <p>Thank you for applying for the position of <strong>${job.title}</strong>.</p>
-      <p>Your resume has been securely stored in our system and will be reviewed soon.</p>
+      <p>Your resume has been securely stored in our system.</p>
       <p><strong>City:</strong> ${city}</p>
       <p><strong>Status:</strong> Pending</p>
       <br/>
@@ -108,11 +115,11 @@ export const applyToJob = async (req, res) => {
 
     console.log(`📧 Email sent to ${email}`);
 
-    // Success response
     res.status(201).json({
       message: "Application submitted successfully.",
       applicationId: newApplication._id,
     });
+
   } catch (err) {
     console.error("❌ Error in applyToJob:", err);
     res.status(500).json({
@@ -121,6 +128,7 @@ export const applyToJob = async (req, res) => {
     });
   }
 };
+
 
 /* ============================================================
    GET ALL JOB POSTINGS (for Candidates)
