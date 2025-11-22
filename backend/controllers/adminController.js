@@ -86,28 +86,33 @@ export const addAdmin = async (req, res) => {
 export const addClientAdmin = async (req, res) => {
   try {
     const { 
-      name, 
-      email, 
-      contactNo, 
-      organizationName, 
-      password, 
-      jobRole,
-      states 
+      name,
+      email,
+      contactNo,
+      organizationName,
+      password,
+      role,        // 👈 frontend sends this!
+      states,
+      regions
     } = req.body;
 
-    // Only main admin can create client admins
+    // Only admin can create client admins
     if (!req.user || req.user.role !== "admin")
       return res.status(403).json({ message: "Only admins can add client admins" });
 
-    // Required fields check
-    if (!name || !email || !organizationName || !password || !jobRole)
+    // Required fields
+    if (!name || !email || !organizationName || !password || !role)
       return res.status(400).json({ message: "Missing required fields" });
 
-    // State validation
+    // States validation
     if (!states || !Array.isArray(states) || states.length === 0)
       return res.status(400).json({ message: "At least one state must be provided" });
 
-    // Check if email already exists
+    // Regions validation
+    if (!regions || !Array.isArray(regions) || regions.length === 0)
+      return res.status(400).json({ message: "At least one region must be provided" });
+
+    // Check for duplicate
     const existing = await ClientAdmin.findOne({ email });
     if (existing)
       return res.status(409).json({ message: "Client admin already exists" });
@@ -121,9 +126,10 @@ export const addClientAdmin = async (req, res) => {
       organizationName,
       password: hashedPass,
 
-      // 🔥 New fields
-      jobRole,
+      // 👇 EXACT MATCH to frontend fields
+      role,
       states,
+      regions,
 
       registrationDetails: {
         username: email,
@@ -137,6 +143,7 @@ export const addClientAdmin = async (req, res) => {
       message: "Client admin created successfully",
       clientAdmin: newClientAdmin,
     });
+
   } catch (error) {
     console.error("Add client admin error:", error);
     res.status(500).json({ message: "Server error" });
