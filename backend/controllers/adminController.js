@@ -172,15 +172,50 @@ export const registerRetailer = async (req, res) => {
     const body = req.body;
     const files = req.files || {};
 
-    const { contactNo, email } = body;
-    if (!email || !contactNo)
-      return res.status(400).json({
-        message: "Email and contact number are required",
-      });
+    const {
+      name,
+      email,
+      contactNo,
+      shopName,
+      businessType,
+      PANCard,
+      shopAddress,
+      shopCity,
+      shopState,
+      shopPincode,
+      bankName,
+      accountNumber,
+      IFSC,
+      branchName
+    } = body;
 
-    /* --------------------------------------------
-       🔍 STEP 1: Check email/phone duplication
-    --------------------------------------------- */
+    /* ----------------------------------------------------
+       🔍 STEP 1: Check mandatory fields
+    ---------------------------------------------------- */
+    if (
+      !name ||
+      !email ||
+      !contactNo ||
+      !shopName ||
+      !businessType ||
+      !PANCard ||
+      !shopAddress ||
+      !shopCity ||
+      !shopState ||
+      !shopPincode ||
+      !bankName ||
+      !accountNumber ||
+      !IFSC ||
+      !branchName
+    ) {
+      return res.status(400).json({
+        message: "Missing required fields",
+      });
+    }
+
+    /* ----------------------------------------------------
+       🔍 STEP 2: Check duplication
+    ---------------------------------------------------- */
     const existingRetailer = await Retailer.findOne({
       $or: [{ contactNo }, { email }],
     });
@@ -190,15 +225,15 @@ export const registerRetailer = async (req, res) => {
         message: "Phone or email already registered",
       });
 
-    /* --------------------------------------------
-       🔍 STEP 2: Construct shopDetails (STRICT SCHEMA)
-    --------------------------------------------- */
+    /* ----------------------------------------------------
+       🔍 STEP 3: Prepare mandatory shopDetails
+    ---------------------------------------------------- */
     const shopDetails = {
-      shopName: body.shopName,
-      businessType: body.businessType,
-      ownershipType: body.ownershipType,
-      GSTNo: body.GSTNo,
-      PANCard: body.PANCard,
+      shopName,
+      businessType,
+      PANCard,
+      ownershipType: body.ownershipType, // optional
+      GSTNo: body.GSTNo, // optional
 
       outletPhoto: files.outletPhoto
         ? {
@@ -208,52 +243,49 @@ export const registerRetailer = async (req, res) => {
         : undefined,
 
       shopAddress: {
-        address: body.shopAddress,
+        address: shopAddress,
         address2: body.shopAddress2,
-        city: body.shopCity,
-        state: body.shopState,
-        pincode: body.shopPincode,
+        city: shopCity,
+        state: shopState,
+        pincode: shopPincode,
       },
     };
 
-    /* --------------------------------------------
-       🔍 STEP 3: Construct bankDetails
-    --------------------------------------------- */
+    /* ----------------------------------------------------
+       🔍 STEP 4: Prepare mandatory bankDetails
+    ---------------------------------------------------- */
     const bankDetails = {
-      bankName: body.bankName,
-      accountNumber: body.accountNumber,
-      IFSC: body.IFSC,
-      branchName: body.branchName,
+      bankName,
+      accountNumber,
+      IFSC,
+      branchName,
     };
 
-    /* --------------------------------------------
-       🔍 STEP 4: Create Retailer object
-    --------------------------------------------- */
+    /* ----------------------------------------------------
+       🔍 STEP 5: Create Retailer
+    ---------------------------------------------------- */
     const retailer = new Retailer({
-      name: body.name,
+      name,
       email,
       contactNo,
+      password: contactNo, // default password
 
-      password: contactNo, // default
-
+      // Optional fields
       gender: body.gender,
       govtIdType: body.govtIdType,
       govtIdNumber: body.govtIdNumber,
-
       govtIdPhoto: files.govtIdPhoto
         ? {
             data: files.govtIdPhoto[0].buffer,
             contentType: files.govtIdPhoto[0].mimetype,
           }
         : undefined,
-
       personPhoto: files.personPhoto
         ? {
             data: files.personPhoto[0].buffer,
             contentType: files.personPhoto[0].mimetype,
           }
         : undefined,
-
       registrationForm: files.registrationForm
         ? {
             data: files.registrationForm[0].buffer,
@@ -269,9 +301,9 @@ export const registerRetailer = async (req, res) => {
       partOfIndia: body.partOfIndia || "N",
     });
 
-    /* --------------------------------------------
-       🔥 Save Retailer
-    --------------------------------------------- */
+    /* ----------------------------------------------------
+       🔥 Save into DB
+    ---------------------------------------------------- */
     await retailer.save();
 
     return res.status(201).json({
