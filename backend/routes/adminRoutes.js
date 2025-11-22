@@ -27,7 +27,7 @@ import {
   getJobApplications,
   updateApplicationStatus,
   getCandidateResume,
-
+updateCampaign,
 changeEmployeeStatus,
   updateRetailerDates,
   updateEmployeeDates
@@ -35,6 +35,7 @@ changeEmployeeStatus,
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+router.put("/campaigns/:id", protect, updateCampaign);
 
 router.post("/login", loginAdmin);
 router.post("/add-admin", protect, addAdmin);
