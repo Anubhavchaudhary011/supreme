@@ -135,13 +135,17 @@ const retailerSchema = new Schema(
     name: { type: String, required: true },
     contactNo: { type: String, required: true, unique: true },
     email: String,
-    password: { type: String },
+
+    
+    password: { type: String, required: true },
+
     gender: { type: String, enum: ["Male", "Female", "Other"], required: true },
     govtIdType: String,
     govtIdNumber: String,
     govtIdPhoto: { data: Buffer, contentType: String },
     personPhoto: { data: Buffer, contentType: String },
-    registrationForm: { data: Buffer, contentType: String },   // ✅ ADDED
+    registrationForm: { data: Buffer, contentType: String },
+
     shopDetails: {
       shopName: String,
       businessType: String,
@@ -157,33 +161,39 @@ const retailerSchema = new Schema(
         pincode: String,
       },
     },
+
     bankDetails: {
       bankName: String,
       accountNumber: String,
       IFSC: String,
       branchName: String,
     },
+
     createdBy: {
       type: String,
       enum: ["RetailerSelf", "Employee", "AdminAdded"],
       default: "RetailerSelf",
     },
+
     phoneVerified: { type: Boolean, default: false },
+
     assignedCampaigns: [
       {
         type: Schema.Types.ObjectId,
         ref: "Campaign",
       },
     ],
+
     assignedEmployee: {
       type: Schema.Types.ObjectId,
       ref: "Employee",
     },
 
-    partOfIndia: { type: String, default: "N" }, // ✅ ADDED
+    partOfIndia: { type: String, default: "N" },
   },
   { timestamps: true }
 );
+
 export const Retailer = model("Retailer", retailerSchema);
 
 /* ===============================
