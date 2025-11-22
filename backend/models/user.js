@@ -529,9 +529,6 @@ const careerApplicationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// 🔥 FIX CORRUPTED INDEX PROBLEM
-careerApplicationSchema.index({ candidate: 1 }, { unique: false, sparse: false });
-
 export const CareerApplication = mongoose.model("CareerApplication", careerApplicationSchema);
 
 
