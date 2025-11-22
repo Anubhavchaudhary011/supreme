@@ -502,20 +502,36 @@ export const getCampaignById = async (req, res) => {
   }
 };
 
-export const getAllCampaigns = async (req, res) => {
+export const getEmployeeCampaigns = async (req, res) => {
   try {
-    const campaigns = await Campaign.find()
-      .select("name client type regions states campaignStartDate campaignEndDate isActive assignedRetailers assignedEmployees createdBy")
+    const employee = await Employee.findById(req.user.id);
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    const campaigns = await Campaign.find({
+      "assignedEmployees.employeeId": employee._id,
+    })
       .populate("createdBy", "name email")
       .populate("assignedEmployees.employeeId", "name email")
-      .populate("assignedRetailers.retailerId", "name contactNo");
+      .populate("assignedRetailers.retailerId", "name contactNo")
+      .sort({ createdAt: -1 });
 
-    res.status(200).json({ campaigns });
+    res.status(200).json({
+      message: "Campaigns fetched successfully",
+      employee: {
+        id: employee._id,
+        name: employee.name,
+        email: employee.email,
+      },
+      campaigns,
+    });
   } catch (error) {
-    console.error("Get campaigns error:", error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Get employee campaigns error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 export const deleteCampaign = async (req, res) => {
   try {
