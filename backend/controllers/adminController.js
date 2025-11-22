@@ -362,21 +362,33 @@ export const addCampaign = async (req, res) => {
   try {
     const {
       name,
-      client,              // This is organizationName
+      client,                 // organizationName string
       type,
-      region,
-      state,
+      regions,                // ARRAY
+      states,                 // ARRAY
       campaignStartDate,
       campaignEndDate
     } = req.body;
 
     // Admin auth check
-    if (!req.user || req.user.role !== "admin")
+    if (!req.user || req.user.role !== "admin") {
       return res.status(403).json({ message: "Only admins can create campaigns" });
+    }
 
     // Required fields validation
-    if (!name || !client || !type || !region || !state)
-      return res.status(400).json({ message: "All fields are required" });
+    if (!name || !client || !type) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // Validate regions
+    if (!regions || !Array.isArray(regions) || regions.length === 0) {
+      return res.status(400).json({ message: "At least one region is required" });
+    }
+
+    // Validate states
+    if (!states || !Array.isArray(states) || states.length === 0) {
+      return res.status(400).json({ message: "At least one state is required" });
+    }
 
     // Validate organization exists (ONLY VALIDATION)
     const clientOrg = await ClientAdmin.findOne({ organizationName: client });
@@ -388,31 +400,31 @@ export const addCampaign = async (req, res) => {
     }
 
     // Date validation
-    if (!campaignStartDate || !campaignEndDate)
+    if (!campaignStartDate || !campaignEndDate) {
       return res.status(400).json({ message: "Campaign start and end date are required" });
+    }
 
     const start = new Date(campaignStartDate);
     const end = new Date(campaignEndDate);
 
-    if (isNaN(start) || isNaN(end))
+    if (isNaN(start) || isNaN(end)) {
       return res.status(400).json({ message: "Invalid date format" });
+    }
 
-
-    if (start > end)
+    if (start > end) {
       return res.status(400).json({ message: "Start date cannot be after end date" });
+    }
 
-    // Create campaign (ONLY store organization name)
+    // Create campaign
     const campaign = new Campaign({
       name,
-      client, // Store ONLY the organizationName string
+      client,          // store ONLY the org name string
       type,
-      region,
-      state,
+      regions,         // ARRAY
+      states,          // ARRAY
       createdBy: req.user.id,
       campaignStartDate: start,
-      campaignEndDate: end,
-      // DO NOT LINK CLIENT ADMIN ID
-      // ONLY STORE ORGANIZATION NAME
+      campaignEndDate: end
     });
 
     await campaign.save();
