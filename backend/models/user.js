@@ -139,7 +139,7 @@ const retailerSchema = new Schema(
     
     password: { type: String, required: true },
 
-    gender: { type: String, enum: ["Male", "Female", "Other"], required: true },
+    gender: { type: String, enum: ["Male", "Female", "Other","Prefer not to say"] },
     govtIdType: String,
     govtIdNumber: String,
     govtIdPhoto: { data: Buffer, contentType: String },
@@ -147,26 +147,26 @@ const retailerSchema = new Schema(
     registrationForm: { data: Buffer, contentType: String },
 
     shopDetails: {
-      shopName: String,
-      businessType: String,
+      shopName:{ type:String , required:true},
+      businessType:{ type:String ,required:true},
       ownershipType: String,
       GSTNo: String,
-      PANCard: String,
+      PANCard:{ type:String , required:true},
       outletPhoto: { data: Buffer, contentType: String },
       shopAddress: {
-        address: String,
+        address:{ type:String , required:true},
         address2: String,
-        city: String,
-        state: String,
-        pincode: String,
+        city: { type:String , required:true},
+        state:{ type:String , required:true},
+        pincode: { type:String , required:true},
       },
     },
 
     bankDetails: {
-      bankName: String,
-      accountNumber: String,
-      IFSC: String,
-      branchName: String,
+      bankName: { type:String , required:true},
+      accountNumber: { type:String , required:true},
+      IFSC:{ type:String , required:true},
+      branchName: { type:String , required:true},
     },
 
     createdBy: {
