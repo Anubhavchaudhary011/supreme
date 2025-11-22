@@ -72,14 +72,32 @@ const clientAdminSchema = new Schema(
     contactNo: String,
     password: { type: String, required: true },
     organizationName: { type: String, required: true },
+
+    
+    states: [
+      {
+        type: String,
+        required: true,
+      }
+    ],
+
+    jobRole: {
+      type: String,
+      required: true,
+    },
+
     registrationDetails: {
       username: { type: String, required: true },
-      password: { type: String, required: true },
-    },
+      password: { type: String, required: true }
+    }
   },
   { timestamps: true }
 );
+
+
+
 export const ClientAdmin = model("ClientAdmin", clientAdminSchema);
+
 
 /* ===============================
    CLIENT USER SCHEMA
