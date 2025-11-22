@@ -85,14 +85,29 @@ export const addAdmin = async (req, res) => {
 ====================================================== */
 export const addClientAdmin = async (req, res) => {
   try {
-    const { name, email, contactNo, organizationName, password } = req.body;
+    const { 
+      name, 
+      email, 
+      contactNo, 
+      organizationName, 
+      password, 
+      jobRole,
+      states 
+    } = req.body;
 
+    // Only main admin can create client admins
     if (!req.user || req.user.role !== "admin")
       return res.status(403).json({ message: "Only admins can add client admins" });
 
-    if (!name || !email || !organizationName || !password)
+    // Required fields check
+    if (!name || !email || !organizationName || !password || !jobRole)
       return res.status(400).json({ message: "Missing required fields" });
 
+    // State validation
+    if (!states || !Array.isArray(states) || states.length === 0)
+      return res.status(400).json({ message: "At least one state must be provided" });
+
+    // Check if email already exists
     const existing = await ClientAdmin.findOne({ email });
     if (existing)
       return res.status(409).json({ message: "Client admin already exists" });
@@ -105,6 +120,11 @@ export const addClientAdmin = async (req, res) => {
       contactNo,
       organizationName,
       password: hashedPass,
+
+      // 🔥 New fields
+      jobRole,
+      states,
+
       registrationDetails: {
         username: email,
         password: hashedPass,
@@ -112,6 +132,7 @@ export const addClientAdmin = async (req, res) => {
     });
 
     await newClientAdmin.save();
+
     res.status(201).json({
       message: "Client admin created successfully",
       clientAdmin: newClientAdmin,
@@ -121,6 +142,7 @@ export const addClientAdmin = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 //
 export const registerRetailer = async (req, res) => {
   try {
