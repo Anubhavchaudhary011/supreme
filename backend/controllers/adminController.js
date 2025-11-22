@@ -976,7 +976,9 @@ export const getAllEmployees = async (req, res) => {
 ====================================================== */
 export const getAllRetailers = async (req, res) => {
   try {
-    const retailers = await Retailer.find().select("_id name contactNo");
+    // Return the FULL retailer object with all nested fields
+    const retailers = await Retailer.find();  
+
     res.status(200).json({ retailers });
   } catch (err) {
     console.error("Get retailers error:", err);
