@@ -90,10 +90,9 @@ export const addClientAdmin = async (req, res) => {
       email,
       contactNo,
       organizationName,
-      password,
-      role,        // 👈 frontend sends this!
-      states,
-      regions
+      role,
+      regions,
+      states
     } = req.body;
 
     // Only admin can create client admins
@@ -101,7 +100,7 @@ export const addClientAdmin = async (req, res) => {
       return res.status(403).json({ message: "Only admins can add client admins" });
 
     // Required fields
-    if (!name || !email || !organizationName || !password || !role)
+    if (!name || !email || !organizationName || !contactNo || !role)
       return res.status(400).json({ message: "Missing required fields" });
 
     // States validation
@@ -112,28 +111,30 @@ export const addClientAdmin = async (req, res) => {
     if (!regions || !Array.isArray(regions) || regions.length === 0)
       return res.status(400).json({ message: "At least one region must be provided" });
 
-    // Check for duplicate
+    // Check existing
     const existing = await ClientAdmin.findOne({ email });
     if (existing)
       return res.status(409).json({ message: "Client admin already exists" });
 
-    const hashedPass = await bcrypt.hash(password, 10);
+    // 🔥 DEFAULT PASSWORD = contactNo
+    const hashedPassword = await bcrypt.hash(contactNo.toString(), 10);
 
     const newClientAdmin = new ClientAdmin({
       name,
       email,
       contactNo,
       organizationName,
-      password: hashedPass,
 
-      // 👇 EXACT MATCH to frontend fields
+      // 🔥 frontend aligned
       role,
-      states,
       regions,
+      states,
+
+      password: hashedPassword,
 
       registrationDetails: {
         username: email,
-        password: hashedPass,
+        password: hashedPassword, // stored hashed
       },
     });
 
