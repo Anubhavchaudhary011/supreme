@@ -85,12 +85,12 @@ const clientAdminSchema = new Schema(
     regions: [
       {
         type: String,
-        required: true,
+
       }
     ],
 
     // 🔥 JOB ROLE (matches role.value)
-    jobRole: {
+    role: {
       type: String,
       required: true,
     },
