@@ -416,13 +416,20 @@ const campaignSchema = new Schema(
       required: true,
     },
 
-    region: {
-      type: String,
-      enum: ["North", "South", "East", "West", "All"],
-      required: true,
-    },
+ regions: [
+  {
+    type: String,
+    enum: ["North", "South", "East", "West", "All"],
+    required: true,
+  }
+],
 
-    state: { type: String, required: true },
+states: [
+  {
+    type: String,
+    required: true,
+  }
+],
 
     createdBy: { type: Types.ObjectId, ref: "Admin", required: true },
 
