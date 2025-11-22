@@ -136,8 +136,7 @@ const retailerSchema = new Schema(
     contactNo: { type: String, required: true, unique: true },
     email: String,
 
-    
-    password: { type: String, required: true },
+    password: { type: String, required: true },  // ✔ UNTOUCHED
 
     gender: { type: String },
     govtIdType: String,
@@ -147,26 +146,26 @@ const retailerSchema = new Schema(
     registrationForm: { data: Buffer, contentType: String },
 
     shopDetails: {
-      shopName:{ type:String , required:true},
-      businessType:{ type:String ,required:true},
+      shopName: { type: String, required: true },
+      businessType: { type: String, required: true },
       ownershipType: String,
       GSTNo: String,
-      PANCard:{ type:String , required:true},
+      PANCard: { type: String, required: true },
       outletPhoto: { data: Buffer, contentType: String },
       shopAddress: {
-        address:{ type:String , required:true},
+        address: { type: String, required: true },
         address2: String,
-        city: { type:String , required:true},
-        state:{ type:String , required:true},
-        pincode: { type:String , required:true},
+        city: { type: String, required: true },
+        state: { type: String, required: true },
+        pincode: { type: String, required: true },
       },
     },
 
     bankDetails: {
-      bankName: { type:String , required:true},
-      accountNumber: { type:String , required:true},
-      IFSC:{ type:String , required:true},
-      branchName: { type:String , required:true},
+      bankName: { type: String, required: true },
+      accountNumber: { type: String, required: true },
+      IFSC: { type: String, required: true },
+      branchName: { type: String, required: true },
     },
 
     createdBy: {
@@ -193,6 +192,36 @@ const retailerSchema = new Schema(
   },
   { timestamps: true }
 );
+
+// 🚀 AUTO GENERATE UNIQUE ID + RETAILER CODE
+retailerSchema.pre("save", function (next) {
+  try {
+    if (!this.uniqueId) {
+      const partOfIndia = this.partOfIndia || "N";
+      const businessType = this.shopDetails?.businessType || "O";
+      const typeLetter = businessType.charAt(0).toUpperCase();
+
+      const state = this.shopDetails?.shopAddress?.state || "NA";
+      const city = this.shopDetails?.shopAddress?.city || "NA";
+
+      const stateCode = state.substring(0, 2).toUpperCase();
+      const cityCode = city.substring(0, 3).toUpperCase();
+      const randomNum = Math.floor(1000 + Math.random() * 9000);
+
+      this.uniqueId = `${partOfIndia}${typeLetter}${stateCode}${cityCode}${randomNum}`;
+    }
+
+    if (!this.retailerCode) {
+      const timestamp = Date.now().toString().slice(-6);
+      const randomPart = Math.floor(100 + Math.random() * 900);
+      this.retailerCode = `R${timestamp}${randomPart}`;
+    }
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 export const Retailer = model("Retailer", retailerSchema);
 
