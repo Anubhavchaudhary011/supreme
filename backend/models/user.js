@@ -73,7 +73,7 @@ const clientAdminSchema = new Schema(
     password: { type: String, required: true },
     organizationName: { type: String, required: true },
 
-    
+    // 🔥 MULTIPLE STATES (matches states.map())
     states: [
       {
         type: String,
@@ -81,6 +81,15 @@ const clientAdminSchema = new Schema(
       }
     ],
 
+    // 🔥 MULTIPLE REGIONS (matches regions.map())
+    regions: [
+      {
+        type: String,
+        required: true,
+      }
+    ],
+
+    // 🔥 JOB ROLE (matches role.value)
     jobRole: {
       type: String,
       required: true,
@@ -93,8 +102,6 @@ const clientAdminSchema = new Schema(
   },
   { timestamps: true }
 );
-
-
 
 export const ClientAdmin = model("ClientAdmin", clientAdminSchema);
 
