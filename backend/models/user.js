@@ -139,7 +139,7 @@ const retailerSchema = new Schema(
     
     password: { type: String, required: true },
 
-    gender: { type: String, enum: ["Male", "Female", "Other","Prefer not to say"] },
+    gender: { type: String },
     govtIdType: String,
     govtIdNumber: String,
     govtIdPhoto: { data: Buffer, contentType: String },
