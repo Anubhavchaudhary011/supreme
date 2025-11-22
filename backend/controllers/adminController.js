@@ -502,13 +502,13 @@ export const getCampaignById = async (req, res) => {
   }
 };
 
-
 export const getAllCampaigns = async (req, res) => {
   try {
     const campaigns = await Campaign.find()
+      .select("name client type regions states campaignStartDate campaignEndDate isActive assignedRetailers assignedEmployees createdBy")
       .populate("createdBy", "name email")
-      .populate("assignedEmployees", "name email")
-      .populate("assignedRetailers", "name contactNo");
+      .populate("assignedEmployees.employeeId", "name email")
+      .populate("assignedRetailers.retailerId", "name contactNo");
 
     res.status(200).json({ campaigns });
   } catch (error) {
