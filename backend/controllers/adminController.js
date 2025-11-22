@@ -1,3 +1,4 @@
+
 import {
   Admin,
   ClientAdmin,
@@ -15,6 +16,20 @@ import nodemailer from "nodemailer";
 import XLSX from "xlsx";
 import { CareerApplication,Job, JobApplication } from "../models/user.js";
 import mongoose from "mongoose";
+export const getAllCampaigns = async (req, res) => {
+  try {
+    const campaigns = await Campaign.find()
+      .populate("createdBy", "name email")
+      .populate("assignedEmployees.employeeId", "name email")
+      .populate("assignedRetailers.retailerId", "name contactNo");
+
+    res.status(200).json({ campaigns });
+  } catch (error) {
+    console.error("Get campaigns error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 /* ======================================================
    ADMIN LOGIN
 ====================================================== */
