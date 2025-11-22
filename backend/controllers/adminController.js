@@ -174,7 +174,9 @@ export const registerRetailer = async (req, res) => {
     const { contactNo, email } = body;
 
     if (!email || !contactNo)
-      return res.status(400).json({ message: "Email and contact number are required" });
+      return res
+        .status(400)
+        .json({ message: "Email and contact number are required" });
 
     const personalAddress = {
       address: body.address,
@@ -200,18 +202,23 @@ export const registerRetailer = async (req, res) => {
       shopName: body["shopDetails.shopName"] || body.shopName,
       businessType: body["shopDetails.businessType"] || body.businessType,
       ownershipType: body["shopDetails.ownershipType"] || body.ownershipType,
-      dateOfEstablishment: body["shopDetails.dateOfEstablishment"] || body.dateOfEstablishment,
+      dateOfEstablishment:
+        body["shopDetails.dateOfEstablishment"] || body.dateOfEstablishment,
       GSTNo: body["shopDetails.GSTNo"] || body.GSTNo,
       PANCard: body["shopDetails.PANCard"] || body.PANCard,
       shopAddress,
       outletPhoto: files.outletPhoto
-        ? { data: files.outletPhoto[0].buffer, contentType: files.outletPhoto[0].mimetype }
+        ? {
+            data: files.outletPhoto[0].buffer,
+            contentType: files.outletPhoto[0].mimetype,
+          }
         : undefined,
     };
 
     const bankDetails = {
       bankName: body["bankDetails.bankName"] || body.bankName,
-      accountNumber: body["bankDetails.accountNumber"] || body.accountNumber,
+      accountNumber:
+        body["bankDetails.accountNumber"] || body.accountNumber,
       IFSC: body["bankDetails.IFSC"] || body.IFSC,
       branchName: body["bankDetails.branchName"] || body.branchName,
     };
@@ -221,47 +228,60 @@ export const registerRetailer = async (req, res) => {
       $or: [{ contactNo }, { email }],
     });
     if (existingRetailer)
-      return res.status(400).json({ message: "Phone or email already registered" });
+      return res
+        .status(400)
+        .json({ message: "Phone or email already registered" });
 
     const retailer = new Retailer({
       name: body.name,
       contactNo,
       email,
+
+      // 🔥 Default password = phone number
+      password: contactNo,
+
       dob: body.dob,
       gender: body.gender,
       govtIdType: body.govtIdType,
       govtIdNumber: body.govtIdNumber,
       govtIdPhoto: files.govtIdPhoto
-        ? { data: files.govtIdPhoto[0].buffer, contentType: files.govtIdPhoto[0].mimetype }
+        ? {
+            data: files.govtIdPhoto[0].buffer,
+            contentType: files.govtIdPhoto[0].mimetype,
+          }
         : undefined,
       personPhoto: files.personPhoto
-        ? { data: files.personPhoto[0].buffer, contentType: files.personPhoto[0].mimetype }
+        ? {
+            data: files.personPhoto[0].buffer,
+            contentType: files.personPhoto[0].mimetype,
+          }
         : undefined,
       signature: files.signature
-        ? { data: files.signature[0].buffer, contentType: files.signature[0].mimetype }
+        ? {
+            data: files.signature[0].buffer,
+            contentType: files.signature[0].mimetype,
+          }
         : undefined,
       personalAddress,
       shopDetails,
       bankDetails,
-
-     
       createdBy: body.createdBy || "AdminAdded",
-
-      
       phoneVerified: true,
-
       partOfIndia: body.partOfIndia || "N",
     });
 
     await retailer.save();
 
+    // ✅ return full retailer document
     res.status(201).json({
       message: "Retailer registered successfully",
-      uniqueId: retailer.uniqueId,
+      retailer,
     });
   } catch (error) {
     console.error("Retailer registration error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
   }
 };
 
