@@ -1589,3 +1589,116 @@ export const resetPassword = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+/* ======================================================
+   EDIT / UPDATE EXISTING CAMPAIGN (FULL UPDATE)
+   PUT /admin/campaigns/:id
+====================================================== */
+export const updateCampaign = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can edit campaigns" });
+    }
+
+    const campaign = await Campaign.findById(id);
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found" });
+    }
+
+    const {
+      name,
+      client,
+      type,
+      regions,
+      states,
+      campaignStartDate,
+      campaignEndDate,
+      isActive,
+
+      assignedRetailers,
+      assignedEmployees
+    } = req.body;
+
+    /* -----------------------------------------------------
+       UPDATE BASIC FIELDS (only if provided)
+    ------------------------------------------------------ */
+    if (name) campaign.name = name;
+    if (client) campaign.client = client;
+    if (type) campaign.type = type;
+    if (regions) campaign.regions = regions;
+    if (states) campaign.states = states;
+
+    if (campaignStartDate) campaign.campaignStartDate = new Date(campaignStartDate);
+    if (campaignEndDate) campaign.campaignEndDate = new Date(campaignEndDate);
+
+    if (isActive !== undefined) campaign.isActive = isActive;
+
+    /* -----------------------------------------------------
+       UPDATE ASSIGNED RETAILERS (add / update / remove)
+    ------------------------------------------------------ */
+    if (assignedRetailers) {
+      assignedRetailers.forEach((item) => {
+        const existing = campaign.assignedRetailers.find(
+          (r) => r.retailerId.toString() === item.retailerId
+        );
+
+        if (existing) {
+          // update retailer record
+          if (item.status) existing.status = item.status;
+          if (item.startDate) existing.startDate = new Date(item.startDate);
+          if (item.endDate) existing.endDate = new Date(item.endDate);
+          existing.updatedAt = new Date();
+        } else {
+          // add new retailer
+          campaign.assignedRetailers.push({
+            retailerId: item.retailerId,
+            status: item.status || "pending",
+            startDate: item.startDate ? new Date(item.startDate) : null,
+            endDate: item.endDate ? new Date(item.endDate) : null,
+            assignedAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+      });
+    }
+
+    /* -----------------------------------------------------
+       UPDATE ASSIGNED EMPLOYEES (add / update / remove)
+    ------------------------------------------------------ */
+    if (assignedEmployees) {
+      assignedEmployees.forEach((item) => {
+        const existing = campaign.assignedEmployees.find(
+          (e) => e.employeeId.toString() === item.employeeId
+        );
+
+        if (existing) {
+          if (item.status) existing.status = item.status;
+          if (item.startDate) existing.startDate = new Date(item.startDate);
+          if (item.endDate) existing.endDate = new Date(item.endDate);
+          existing.updatedAt = new Date();
+        } else {
+          campaign.assignedEmployees.push({
+            employeeId: item.employeeId,
+            status: item.status || "pending",
+            startDate: item.startDate ? new Date(item.startDate) : null,
+            endDate: item.endDate ? new Date(item.endDate) : null,
+            assignedAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+      });
+    }
+
+    await campaign.save();
+
+    res.status(200).json({
+      message: "Campaign updated successfully",
+      campaign,
+    });
+
+  } catch (error) {
+    console.error("Update campaign error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
