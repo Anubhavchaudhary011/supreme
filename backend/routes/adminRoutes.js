@@ -6,6 +6,7 @@ import {
   addClientAdmin,
   addClientUser,
   loginClientAdmin,
+  getCampaignById,
   registerRetailer,
   forgotPassword,
   resetPassword,
@@ -36,7 +37,7 @@ changeEmployeeStatus,
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 router.put("/campaigns/:id", protect, updateCampaign);
-
+router.get("/campaigns/:id",protect,getCampaignById);
 router.post("/login", loginAdmin);
 router.post("/add-admin", protect, addAdmin);
 router.post("/add-client-admin", protect, addClientAdmin);
