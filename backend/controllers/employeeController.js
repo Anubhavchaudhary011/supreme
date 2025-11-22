@@ -232,28 +232,28 @@ export const loginEmployee = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    // JWT Token
     const token = jwt.sign(
       { id: employee._id, role: "employee" },
       process.env.JWT_SECRET || "supremeSecretKey",
       { expiresIn: "7d" }
     );
 
+    const employeeData = employee.toObject();
+    delete employeeData.password; // ❌ never send password to frontend
+
     res.status(200).json({
       message: "Login successful",
       token,
-      employee: {
-        id: employee._id,
-        name: employee.name,
-        email: employee.email,
-        phone: employee.phone,
-        isFirstLogin: employee.isFirstLogin,
-      },
+      employee: employeeData, // ✔ returns all fields except password
     });
+
   } catch (error) {
     console.error("Employee login error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 /* ======================================================
    GET EMPLOYEE CAMPAIGNS
