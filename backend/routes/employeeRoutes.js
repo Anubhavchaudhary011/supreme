@@ -8,6 +8,7 @@ import {
    submitEmployeeReport,
    getEmployeeReports,
      downloadEmployeeReport,
+     getEmployeeVisitProgress,
      downloadEmployeeReportsExcel
 } from "../controllers/employeeController.js";
 import { protect } from "../middleware/authMiddleware.js";
@@ -64,5 +65,11 @@ router.post(
   downloadEmployeeReport
 );
 router.get("/reports/download/excel", protect, downloadEmployeeReportsExcel);
+// 🔹 Get employee visit progress (Scheduled / Completed / Missed / Cancelled)
+router.get(
+  "/employee/visit-progress",
+  protect,
+  getEmployeeVisitProgress
+);
 
 export default router;
