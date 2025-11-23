@@ -378,6 +378,9 @@ const employeeReportSchema = new Schema(
     campaignId: { type: Types.ObjectId, ref: "Campaign", required: true },
     retailerId: { type: Types.ObjectId, ref: "Retailer", required: true },
 
+    // ⭐ NEW: link report → visit schedule
+    visitScheduleId: { type: Types.ObjectId, ref: "VisitSchedule" },
+
     visitType: String,
     attended: String,
     notVisitedReason: String,
@@ -451,42 +454,63 @@ const campaignSchema = new Schema(
 
     type: {
       type: String,
-      enum: ["Retailer Enrolment", "Display Payment", "Incentive Payment", "Others"],
+      enum: [
+        "Retailer Enrolment",
+        "Display Payment",
+        "Incentive Payment",
+        "Others"
+      ],
       required: true,
     },
 
- regions: [
-  {
-    type: String,
-    enum: ["North", "South", "East", "West", "All"],
-    required: true,
-  }
-],
+    /* ---------------------------
+       REGION SELECTION
+    ---------------------------- */
+    regions: [
+      {
+        type: String,
+        enum: ["North", "South", "East", "West", "All"],
+        required: true,
+      }
+    ],
 
-states: [
-  {
-    type: String,
-    required: true,
-  }
-],
+    /* ---------------------------
+       STATE SELECTION
+    ---------------------------- */
+    states: [
+      {
+        type: String,
+        required: true,
+      }
+    ],
 
-    createdBy: { type: Types.ObjectId, ref: "Admin", required: true },
+    createdBy: {
+      type: Types.ObjectId,
+      ref: "Admin",
+      required: true,
+    },
 
-    // ---------------------------
-    // CAMPAIGN LEVEL DATE RANGE
-    // ---------------------------
+    /* ---------------------------
+       CAMPAIGN DATE WINDOW
+    ---------------------------- */
     campaignStartDate: { type: Date, required: true },
     campaignEndDate: { type: Date, required: true },
 
-    // Campaign Active Status
+    /* ---------------------------
+       ACTIVE / INACTIVE STATUS
+    ---------------------------- */
     isActive: { type: Boolean, default: true },
 
-    // ---------------------------
-    // ASSIGNED RETAILERS
-    // ---------------------------
+    /* ---------------------------
+       ASSIGNED RETAILERS
+    ---------------------------- */
     assignedRetailers: [
       {
-        retailerId: { type: Types.ObjectId, ref: "Retailer", required: true },
+        retailerId: {
+          type: Types.ObjectId,
+          ref: "Retailer",
+          required: true,
+        },
 
         status: {
           type: String,
@@ -494,22 +518,24 @@ states: [
           default: "pending",
         },
 
-        // Automatic timestamps
         assignedAt: { type: Date, default: Date.now },
         updatedAt: { type: Date },
 
-        // Each retailer can have their own date range
-        startDate: { type: Date },  // optional override
-        endDate: { type: Date },    // optional override
-      },
+        // Optional retailer-specific date override
+        startDate: { type: Date },
+        endDate: { type: Date },
+      }
     ],
 
-    // ---------------------------
-    // ASSIGNED EMPLOYEES
-    // ---------------------------
+    /* ---------------------------
+       ASSIGNED EMPLOYEES
+    ---------------------------- */
     assignedEmployees: [
       {
-        employeeId: { type: Types.ObjectId, ref: "Employee" },
+        employeeId: {
+          type: Types.ObjectId,
+          ref: "Employee",
+        },
 
         status: {
           type: String,
@@ -523,8 +549,34 @@ states: [
         // Optional employee-specific date override
         startDate: { type: Date },
         endDate: { type: Date },
-      },
+      }
     ],
+
+    /* --------------------------------------------------
+       NEW FIELD — EMPLOYEE → RETAILER MAPPING
+       (Inside the SAME CAMPAIGN)
+       --------------------------------------------------
+       Allows:
+       ✔ One employee → multiple retailers
+       ✔ One retailer → multiple employees
+       ✔ Both must be assigned to the campaign
+    --------------------------------------------------- */
+    assignedEmployeeRetailers: [
+      {
+        employeeId: {
+          type: Types.ObjectId,
+          ref: "Employee",
+          required: true,
+        },
+        retailerId: {
+          type: Types.ObjectId,
+          ref: "Retailer",
+          required: true,
+        },
+        assignedAt: { type: Date, default: Date.now },
+      }
+    ],
+
   },
   { timestamps: true }
 );
@@ -671,3 +723,54 @@ export const Campaign = model("Campaign", campaignSchema);
 
 
 
+
+const visitScheduleSchema = new Schema(
+  {
+    campaignId: {
+      type: Schema.Types.ObjectId,
+      ref: "Campaign",
+      required: true
+    },
+
+    employeeId: {
+      type: Schema.Types.ObjectId,
+      ref: "Employee",
+      required: true
+    },
+
+    retailerId: {
+      type: Schema.Types.ObjectId,
+      ref: "Retailer",
+      required: true
+    },
+
+    visitDate: {
+      type: Date,
+      required: true
+    },
+
+    visitType: {
+      type: String,
+      enum: ["Visit", "Audit", "Follow-Up", "Collection"],
+      default: "Visit"
+    },
+
+    status: {
+      type: String,
+      enum: ["Scheduled", "Completed", "Missed", "Cancelled"],
+      default: "Scheduled"
+    },
+
+    notes: {
+      type: String
+    },
+
+    assignedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  { timestamps: true }
+);
+
+export const VisitSchedule = model("VisitSchedule", visitScheduleSchema);
