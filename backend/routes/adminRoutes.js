@@ -11,6 +11,8 @@ import {
   forgotPassword,
   resetPassword,
   protect,
+  getCampaignRetailersWithEmployees,
+    assignEmployeeToRetailer,
   updateCampaignStatus,
   addCampaign,
   getAllCampaigns,
@@ -31,7 +33,12 @@ import {
 updateCampaign,
 changeEmployeeStatus,
   updateRetailerDates,
-  updateEmployeeDates
+  updateEmployeeDates,
+   getEmployeeRetailerMapping,
+    assignVisitSchedule,
+  updateVisitScheduleStatus,
+  getEmployeeVisitProgress,
+  getCampaignVisitSchedules
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -55,6 +62,12 @@ router.post(
   bulkAddEmployees
 );
 
+router.get(
+  "/campaign/:campaignId/employee-retailer-mapping",
+  protect,
+  getEmployeeRetailerMapping
+);
+
 router.get("/employees", protect, getAllEmployees);
 
 router.get("/retailers", protect, getAllRetailers);
@@ -70,6 +83,17 @@ router.post(
   registerRetailer
 );
 router.put("/employee/status", protect, changeEmployeeStatus);
+router.post(
+  "/campaign/assign-employee-to-retailer",
+  protect,  // admin required
+  assignEmployeeToRetailer
+);
+router.get(
+  "/campaign/:campaignId/retailers-with-employees",
+  protect,  // admin required
+  getCampaignRetailersWithEmployees
+);
+
 
 router.post("/campaigns", protect, addCampaign);
 router.get("/campaigns", protect, getAllCampaigns);
@@ -100,6 +124,24 @@ router.patch(
   "/campaigns/:campaignId/employee/:employeeId/dates",
   protect,
   updateEmployeeDates
+);
+// ===============================
+// VISIT SCHEDULE ROUTES
+// ===============================
+router.post("/visit-schedule/assign", protect, assignVisitSchedule);
+
+router.patch(
+  "/visit-schedule/:scheduleId/status",
+  protect,
+  updateVisitScheduleStatus
+);
+
+router.get("/employee/visit-progress", protect, getEmployeeVisitProgress);
+
+router.get(
+  "/campaign/:campaignId/visit-schedules",
+  protect,
+  getCampaignVisitSchedules
 );
 
 // ===========================================
