@@ -1,6 +1,7 @@
 
 import {
   Admin,
+  VisitSchedule,
   ClientAdmin,
   ClientUser,
   Retailer,
@@ -1705,5 +1706,422 @@ export const updateCampaign = async (req, res) => {
   } catch (error) {
     console.error("Update campaign error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+export const assignEmployeeToRetailer = async (req, res) => {
+  try {
+    const { campaignId, retailerId, employeeId } = req.body;
+
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can assign" });
+    }
+
+    if (!campaignId || !retailerId || !employeeId) {
+      return res.status(400).json({
+        message: "campaignId, retailerId and employeeId are required"
+      });
+    }
+
+    const campaign = await Campaign.findById(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found" });
+    }
+
+    // -------------------------------
+    // 1️⃣ Check retailer is part of campaign
+    // -------------------------------
+    const retailerExists = campaign.assignedRetailers.some(
+      (r) => r.retailerId.toString() === retailerId.toString()
+    );
+
+    if (!retailerExists) {
+      return res.status(400).json({
+        message: "Retailer is not assigned to this campaign"
+      });
+    }
+
+    // -------------------------------
+    // 2️⃣ Check employee is part of campaign
+    // -------------------------------
+    const employeeExists = campaign.assignedEmployees.some(
+      (e) => e.employeeId.toString() === employeeId.toString()
+    );
+
+    if (!employeeExists) {
+      return res.status(400).json({
+        message: "Employee is not assigned to this campaign"
+      });
+    }
+
+    // -------------------------------
+    // 3️⃣ Prevent duplicate mapping
+    // -------------------------------
+    const alreadyMapped = campaign.assignedEmployeeRetailers.some(
+      (entry) =>
+        entry.employeeId.toString() === employeeId.toString() &&
+        entry.retailerId.toString() === retailerId.toString()
+    );
+
+    if (alreadyMapped) {
+      return res.status(400).json({
+        message: "Employee is already assigned to this retailer"
+      });
+    }
+
+    // -------------------------------
+    // 4️⃣ Save mapping
+    // -------------------------------
+    campaign.assignedEmployeeRetailers.push({
+      employeeId,
+      retailerId,
+      assignedAt: new Date()
+    });
+
+    await campaign.save();
+
+    res.status(200).json({
+      message: "Employee assigned to retailer successfully",
+      mapping: campaign.assignedEmployeeRetailers
+    });
+  } catch (err) {
+    console.error("Assign employee to retailer error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+export const getCampaignRetailersWithEmployees = async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+
+    // Fast, lightweight read
+    const campaign = await Campaign.findById(campaignId)
+      .select("name client type assignedEmployees assignedRetailers")
+      .lean();
+
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found" });
+    }
+
+    // -------------------------
+    // FAST RETAILER FETCH (IN ONE QUERY)
+    // -------------------------
+    const retailerIds = campaign.assignedRetailers.map(r => r.retailerId);
+
+    const retailers = await Retailer.find({ _id: { $in: retailerIds } })
+      .select("name contactNo email shopDetails")
+      .lean();
+
+    // Map retailer meta (status, dates)
+    const retailerMap = {};
+    campaign.assignedRetailers.forEach(r => {
+      retailerMap[r.retailerId] = {
+        status: r.status,
+        assignedAt: r.assignedAt,
+        startDate: r.startDate,
+        endDate: r.endDate
+      };
+    });
+
+    const finalRetailers = retailers.map(r => ({
+      ...r,
+      ...retailerMap[r._id]
+    }));
+
+    // -------------------------
+    // FAST EMPLOYEE FETCH (IN ONE QUERY)
+    // -------------------------
+    const employeeIds = campaign.assignedEmployees.map(e => e.employeeId);
+
+    const employees = await Employee.find({ _id: { $in: employeeIds } })
+      .select("name email phone position")
+      .lean();
+
+    // Map employee meta
+    const employeeMeta = {};
+    campaign.assignedEmployees.forEach(e => {
+      employeeMeta[e.employeeId] = {
+        status: e.status,
+        assignedAt: e.assignedAt,
+        startDate: e.startDate,
+        endDate: e.endDate
+      };
+    });
+
+    const finalEmployees = employees.map(e => ({
+      ...e,
+      ...employeeMeta[e._id]
+    }));
+
+    // -------------------------
+    // RESPONSE
+    // -------------------------
+    res.status(200).json({
+      campaignId,
+      campaignName: campaign.name,
+      client: campaign.client,
+      type: campaign.type,
+
+      totalRetailers: finalRetailers.length,
+      totalEmployees: finalEmployees.length,
+
+      retailers: finalRetailers,
+      employees: finalEmployees
+    });
+
+  } catch (err) {
+    console.error("FAST Campaign fetch error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+export const getEmployeeRetailerMapping = async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+
+    const campaign = await Campaign.findById(campaignId)
+      .select("assignedEmployees assignedRetailers assignedEmployeeRetailers")
+      .lean();
+
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found" });
+    }
+
+    // --------------------------------------------
+    // Get all employees in the mapping
+    // --------------------------------------------
+    const employeeIds = campaign.assignedEmployeeRetailers.map(m => m.employeeId);
+
+    const employees = await Employee.find({ _id: { $in: employeeIds } })
+      .select("name email phone position")
+      .lean();
+
+    // Convert employees into a lookup map
+    const employeeMap = {};
+    employees.forEach(e => {
+      employeeMap[e._id] = { 
+        ...e,
+        retailers: []     // list of retailers will be pushed here
+      };
+    });
+
+    // --------------------------------------------
+    // Get all retailers in the mapping
+    // --------------------------------------------
+    const retailerIds = campaign.assignedEmployeeRetailers.map(m => m.retailerId);
+
+    const retailers = await Retailer.find({ _id: { $in: retailerIds } })
+      .select("name contactNo shopDetails")
+      .lean();
+
+    const retailerMap = {};
+    retailers.forEach(r => {
+      retailerMap[r._id] = r;
+    });
+
+    // --------------------------------------------
+    // Build Mapping: employee → [retailers]
+    // --------------------------------------------
+    campaign.assignedEmployeeRetailers.forEach(mapping => {
+      const eId = mapping.employeeId;
+      const rId = mapping.retailerId;
+
+      if (employeeMap[eId]) {
+        employeeMap[eId].retailers.push({
+          ...retailerMap[rId],
+          assignedAt: mapping.assignedAt
+        });
+      }
+    });
+
+    // --------------------------------------------
+    // Final response
+    // --------------------------------------------
+    res.status(200).json({
+      campaignId,
+      totalEmployees: Object.keys(employeeMap).length,
+      employees: Object.values(employeeMap)
+    });
+
+  } catch (err) {
+    console.error("Employee→Retailer mapping fetch error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+export const assignVisitSchedule = async (req, res) => {
+  try {
+    const { campaignId, employeeId, retailerId, visitDate, visitType, notes } = req.body;
+
+    if (!campaignId || !employeeId || !retailerId || !visitDate) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    const campaign = await Campaign.findById(campaignId).lean();
+    if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+
+    // Check Employee belongs to campaign
+    const employeeExists = campaign.assignedEmployees.some(
+      e => e.employeeId.toString() === employeeId
+    );
+    if (!employeeExists) {
+      return res.status(400).json({ message: "Employee not assigned to campaign" });
+    }
+
+    // Check Retailer belongs to campaign
+    const retailerExists = campaign.assignedRetailers.some(
+      r => r.retailerId.toString() === retailerId
+    );
+    if (!retailerExists) {
+      return res.status(400).json({ message: "Retailer not assigned to campaign" });
+    }
+
+    // Check Mapping exists
+    const mappingExists = campaign.assignedEmployeeRetailers.some(
+      m =>
+        m.employeeId.toString() === employeeId &&
+        m.retailerId.toString() === retailerId
+    );
+
+    if (!mappingExists) {
+      return res.status(400).json({
+        message: "Employee → Retailer mapping does not exist in this campaign"
+      });
+    }
+
+    // Create Visit schedule
+    const visit = await VisitSchedule.create({
+      campaignId,
+      employeeId,
+      retailerId,
+      visitDate,
+      visitType,
+      notes
+    });
+
+    res.status(201).json({
+      message: "Visit assigned successfully",
+      visit
+    });
+  } catch (err) {
+    console.error("Assign visit error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+export const getCampaignVisitSchedules = async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+
+    const visits = await VisitSchedule.find({ campaignId })
+      .populate("employeeId", "name phone position")
+      .populate("retailerId", "name contactNo shopDetails")
+      .sort({ visitDate: 1 });
+
+    res.status(200).json({
+      campaignId,
+      totalVisits: visits.length,
+      visits
+    });
+  } catch (err) {
+    console.error("Fetch campaign visits error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+export const getEmployeeVisitSchedule = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    const visits = await VisitSchedule.find({ employeeId })
+      .populate("campaignId", "name type")
+      .populate("retailerId", "name contactNo")
+      .sort({ visitDate: 1 });
+
+    res.status(200).json({
+      employeeId,
+      totalVisits: visits.length,
+      visits
+    });
+  } catch (err) {
+    console.error("Fetch employee visits error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+export const getEmployeeVisitProgress = async (req, res) => {
+  try {
+    const employeeId = req.user.id;
+
+    const { VisitSchedule } = await import("../models/VisitSchedule.js");
+
+    const { campaignId } = req.query;
+
+    const filter = { employeeId };
+
+    if (campaignId) filter.campaignId = campaignId;
+
+    const visits = await VisitSchedule.find(filter).lean();
+
+    const total = visits.length;
+    const completed = visits.filter(v => v.status === "Completed").length;
+    const missed = visits.filter(v => v.status === "Missed").length;
+    const cancelled = visits.filter(v => v.status === "Cancelled").length;
+    const pending = visits.filter(v => v.status === "Scheduled").length;
+
+    const progressPercent =
+      total === 0 ? 0 : Math.round((completed / total) * 100);
+
+    res.status(200).json({
+      message: "Visit progress fetched successfully",
+      progress: {
+        total,
+        completed,
+        missed,
+        cancelled,
+        pending,
+        progressPercent
+      },
+      visits
+    });
+
+  } catch (error) {
+    console.error("getEmployeeVisitProgress Error:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
+export const updateVisitScheduleStatus = async (req, res) => {
+  try {
+    const employeeId = req.user.id; // employee logged in
+    const { scheduleId } = req.params;
+    const { status } = req.body;
+
+    const { VisitSchedule } = await import("../models/VisitSchedule.js");
+
+    if (!["Completed", "Missed", "Cancelled"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status value" });
+    }
+
+    const schedule = await VisitSchedule.findOne({
+      _id: scheduleId,
+      employeeId: employeeId, // ensure employee owns this schedule
+    });
+
+    if (!schedule) {
+      return res.status(404).json({ message: "Visit schedule not found" });
+    }
+
+    schedule.status = status;
+    schedule.updatedAt = new Date();
+
+    await schedule.save();
+
+    res.status(200).json({
+      message: "Visit schedule status updated successfully",
+      schedule,
+    });
+
+  } catch (error) {
+    console.error("updateVisitScheduleStatus Error:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
   }
 };
