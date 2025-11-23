@@ -1797,7 +1797,7 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
   try {
     const { campaignId } = req.params;
 
-    // Fast, lightweight read
+    // Fetch full campaign (lean for speed)
     const campaign = await Campaign.findById(campaignId)
       .select("name client type assignedEmployees assignedRetailers")
       .lean();
@@ -1807,18 +1807,16 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
     }
 
     // -------------------------
-    // FAST RETAILER FETCH (IN ONE QUERY)
+    // RETAILERS - RETURN ALL FIELDS
     // -------------------------
     const retailerIds = campaign.assignedRetailers.map(r => r.retailerId);
 
     const retailers = await Retailer.find({ _id: { $in: retailerIds } })
-      .select("name contactNo email shopDetails")
-      .lean();
+      .lean(); // <-- FULL retailer document returned
 
-    // Map retailer meta (status, dates)
-    const retailerMap = {};
+    const retailerMeta = {};
     campaign.assignedRetailers.forEach(r => {
-      retailerMap[r.retailerId] = {
+      retailerMeta[r.retailerId] = {
         status: r.status,
         assignedAt: r.assignedAt,
         startDate: r.startDate,
@@ -1828,19 +1826,17 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
 
     const finalRetailers = retailers.map(r => ({
       ...r,
-      ...retailerMap[r._id]
+      ...retailerMeta[r._id]
     }));
 
     // -------------------------
-    // FAST EMPLOYEE FETCH (IN ONE QUERY)
+    // EMPLOYEES - RETURN ALL FIELDS
     // -------------------------
     const employeeIds = campaign.assignedEmployees.map(e => e.employeeId);
 
     const employees = await Employee.find({ _id: { $in: employeeIds } })
-      .select("name email phone position")
-      .lean();
+      .lean(); // <-- FULL employee document returned
 
-    // Map employee meta
     const employeeMeta = {};
     campaign.assignedEmployees.forEach(e => {
       employeeMeta[e.employeeId] = {
@@ -1857,7 +1853,7 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
     }));
 
     // -------------------------
-    // RESPONSE
+    // FINAL RESPONSE
     // -------------------------
     res.status(200).json({
       campaignId,
@@ -1877,6 +1873,7 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 export const getEmployeeRetailerMapping = async (req, res) => {
   try {
     const { campaignId } = req.params;
