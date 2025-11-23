@@ -1730,50 +1730,51 @@ export const assignEmployeeToRetailer = async (req, res) => {
       return res.status(404).json({ message: "Campaign not found" });
     }
 
-    // -------------------------------
-    // 1️⃣ Check retailer is part of campaign
-    // -------------------------------
+    // 1️⃣ Retailer must belong to campaign
     const retailerExists = campaign.assignedRetailers.some(
       (r) => r.retailerId.toString() === retailerId.toString()
     );
-
     if (!retailerExists) {
       return res.status(400).json({
         message: "Retailer is not assigned to this campaign"
       });
     }
 
-    // -------------------------------
-    // 2️⃣ Check employee is part of campaign
-    // -------------------------------
+    // 2️⃣ Employee must belong to campaign
     const employeeExists = campaign.assignedEmployees.some(
       (e) => e.employeeId.toString() === employeeId.toString()
     );
-
     if (!employeeExists) {
       return res.status(400).json({
         message: "Employee is not assigned to this campaign"
       });
     }
 
-    // -------------------------------
-    // 3️⃣ Prevent duplicate mapping
-    // -------------------------------
+    // 3️⃣ Prevent employee-retailer duplicate assignment
     const alreadyMapped = campaign.assignedEmployeeRetailers.some(
       (entry) =>
         entry.employeeId.toString() === employeeId.toString() &&
         entry.retailerId.toString() === retailerId.toString()
     );
-
     if (alreadyMapped) {
       return res.status(400).json({
         message: "Employee is already assigned to this retailer"
       });
     }
 
-    // -------------------------------
-    // 4️⃣ Save mapping
-    // -------------------------------
+    // 4️⃣ ❗ Retailer can have only ONE employee
+    const retailerAssignedToAnother = campaign.assignedEmployeeRetailers.some(
+      (entry) =>
+        entry.retailerId.toString() === retailerId.toString() &&
+        entry.employeeId.toString() !== employeeId.toString()
+    );
+    if (retailerAssignedToAnother) {
+      return res.status(400).json({
+        message: "This retailer is already assigned to another employee"
+      });
+    }
+
+    // 5️⃣ Save mapping
     campaign.assignedEmployeeRetailers.push({
       employeeId,
       retailerId,
@@ -1784,13 +1785,14 @@ export const assignEmployeeToRetailer = async (req, res) => {
 
     res.status(200).json({
       message: "Employee assigned to retailer successfully",
-      mapping: campaign.assignedEmployeeRetailers
+      assignedEmployeeRetailers: campaign.assignedEmployeeRetailers
     });
   } catch (err) {
     console.error("Assign employee to retailer error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 export const getCampaignRetailersWithEmployees = async (req, res) => {
   try {
     const { campaignId } = req.params;
