@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { Employee, Campaign,EmployeeReport } from "../models/user.js";
+import { Employee, Campaign,EmployeeReport,VisitSchedule } from "../models/user.js";
 import bcrypt from "bcryptjs";
 import { Retailer } from "../models/user.js";
 import XLSX from "xlsx";
@@ -203,6 +203,7 @@ export const updateEmployeeProfile = async (req, res) => {
     });
   }
 };
+
 /* ======================================================
    LOGIN EMPLOYEE
 ====================================================== */
@@ -232,28 +233,28 @@ export const loginEmployee = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // JWT Token
     const token = jwt.sign(
       { id: employee._id, role: "employee" },
       process.env.JWT_SECRET || "supremeSecretKey",
       { expiresIn: "7d" }
     );
 
-    const employeeData = employee.toObject();
-    delete employeeData.password; // ❌ never send password to frontend
-
     res.status(200).json({
       message: "Login successful",
       token,
-      employee: employeeData, // ✔ returns all fields except password
+      employee: {
+        id: employee._id,
+        name: employee.name,
+        email: employee.email,
+        phone: employee.phone,
+        isFirstLogin: employee.isFirstLogin,
+      },
     });
-
   } catch (error) {
     console.error("Employee login error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 /* ======================================================
    GET EMPLOYEE CAMPAIGNS
@@ -261,11 +262,17 @@ export const loginEmployee = async (req, res) => {
 export const getEmployeeCampaigns = async (req, res) => {
   try {
     const employee = await Employee.findById(req.user.id);
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
 
     const campaigns = await Campaign.find({
       "assignedEmployees.employeeId": employee._id,
-    }).sort({ createdAt: -1 });
+    })
+      .populate("createdBy", "name email")
+      .populate("assignedEmployees.employeeId", "name email")
+      .populate("assignedRetailers.retailerId", "name contactNo")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       message: "Campaigns fetched successfully",
@@ -395,6 +402,7 @@ export const submitEmployeeReport = async (req, res) => {
     const {
       campaignId,
       retailerId,
+      visitScheduleId,  // optional (employee can send or auto-match)
       visitType,
       attended,
       notVisitedReason,
@@ -414,16 +422,70 @@ export const submitEmployeeReport = async (req, res) => {
       longitude
     } = req.body;
 
-    // Basic Validation
     if (!campaignId || !retailerId) {
       return res.status(400).json({ message: "campaignId and retailerId are required" });
     }
 
-    // Create Report Document
+    /* =======================================================
+       🔥 1. AUTO-FIND VISIT SCHEDULE IF NOT PROVIDED
+    ======================================================= */
+
+    let schedule = null;
+
+    if (visitScheduleId) {
+      schedule = await VisitSchedule.findById(visitScheduleId);
+    } else {
+      // Match today's schedule automatically
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      schedule = await VisitSchedule.findOne({
+        campaignId,
+        employeeId,
+        retailerId,
+        visitDate: { $gte: todayStart, $lte: todayEnd },
+        status: "Scheduled"
+      });
+    }
+
+    /* =======================================================
+       🔥 2. UPDATE SCHEDULE STATUS BASED ON REPORT
+    ======================================================= */
+
+    let updatedStatus = "No Schedule Found";
+
+    if (schedule) {
+      if (attended === "Yes") {
+        schedule.status = "Completed";
+      } else {
+        // Mark as Missed or Cancelled
+        const cancellationReasons = ["Closed", "Out of Stock", "Owner Not Available"];
+
+        if (cancellationReasons.includes(notVisitedReason)) {
+          schedule.status = "Cancelled";
+        } else {
+          schedule.status = "Missed";
+        }
+      }
+
+      schedule.notes = `Status auto-updated from report on ${new Date().toLocaleString()}`;
+      await schedule.save();
+
+      updatedStatus = schedule.status;
+    }
+
+    /* =======================================================
+       🔥 3. CREATE REPORT DOCUMENT
+    ======================================================= */
+
     const report = new EmployeeReport({
       employeeId,
       campaignId,
       retailerId,
+      visitScheduleId: schedule?._id || null,  // Link report → schedule
       visitType,
       attended,
       notVisitedReason,
@@ -445,12 +507,12 @@ export const submitEmployeeReport = async (req, res) => {
       },
     });
 
-    /* ----------------------------
-       🔥 Handle Images Upload
-    ---------------------------- */
+    /* =======================================================
+       🔥 4. HANDLE IMAGES
+    ======================================================= */
+
     const files = req.files || {};
 
-    // Multiple images
     if (files.images) {
       report.images = files.images.map((file) => ({
         data: file.buffer,
@@ -459,7 +521,6 @@ export const submitEmployeeReport = async (req, res) => {
       }));
     }
 
-    // Single bill copy
     if (files.billCopy && files.billCopy[0]) {
       const file = files.billCopy[0];
       report.billCopy = {
@@ -471,16 +532,26 @@ export const submitEmployeeReport = async (req, res) => {
 
     await report.save();
 
+    /* =======================================================
+       🔥 5. RESPONSE
+    ======================================================= */
+
     res.status(201).json({
       message: "Report submitted successfully",
-      report,
+      visitScheduleStatusUpdated: updatedStatus,
+      linkedVisitScheduleId: schedule?._id || "None",
+      report
     });
 
   } catch (error) {
     console.error("Submit report error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
   }
 };
+
 export const getEmployeeReports = async (req, res) => {
   try {
     const employeeId = req.user.id;
@@ -783,6 +854,73 @@ export const downloadEmployeeReportsExcel = async (req, res) => {
     return res.status(500).json({
       message: "Failed to generate Excel file",
       error: error.message,
+    });
+  }
+};
+export const getEmployeeVisitProgress = async (req, res) => {
+  try {
+    const employeeId = req.user.id;
+
+    // Optional campaign filter
+    const { campaignId } = req.query;
+
+    const filter = { employeeId };
+
+    if (campaignId) filter.campaignId = campaignId;
+
+    const visits = await VisitSchedule.find(filter).lean();
+
+    if (!visits.length) {
+      return res.status(200).json({
+        message: "No visit schedules found",
+        progress: {
+          total: 0,
+          completed: 0,
+          missed: 0,
+          cancelled: 0,
+          pending: 0,
+          progressPercent: 0
+        },
+        visits: []
+      });
+    }
+
+    /* ===========================
+       🔥 Calculate progress
+    =========================== */
+
+    const total = visits.length;
+    const completed = visits.filter(v => v.status === "Completed").length;
+    const missed = visits.filter(v => v.status === "Missed").length;
+    const cancelled = visits.filter(v => v.status === "Cancelled").length;
+    const pending = visits.filter(v => v.status === "Scheduled").length;
+
+    const progressPercent = total > 0 
+      ? Math.round((completed / total) * 100)
+      : 0;
+
+    /* ===========================
+       🔥 Send response
+    =========================== */
+
+    res.status(200).json({
+      message: "Visit progress fetched successfully",
+      progress: {
+        total,
+        completed,
+        missed,
+        cancelled,
+        pending,
+        progressPercent
+      },
+      visits
+    });
+
+  } catch (error) {
+    console.error("Visit progress error:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message
     });
   }
 };
