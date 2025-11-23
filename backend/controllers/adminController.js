@@ -845,10 +845,12 @@ export const assignCampaign = async (req, res) => {
       return res.status(404).json({ message: "Campaign not found" });
     }
 
-    // Campaign allowed states (array)
-    const allowedStates = Array.isArray(campaign.state)
-      ? campaign.state
-      : [campaign.state];
+    // -------------------------------
+    // FIX: Use campaign.states (correct field)
+    // -------------------------------
+    const allowedStates = Array.isArray(campaign.states)
+      ? campaign.states
+      : [campaign.states];
 
     const startDate = campaign.campaignStartDate;
     const endDate = campaign.campaignEndDate;
@@ -858,7 +860,7 @@ export const assignCampaign = async (req, res) => {
     campaign.assignedRetailers ||= [];
 
     /* =========================================================================
-       ASSIGN EMPLOYEES — Validate state before assigning
+       ASSIGN EMPLOYEES
     ========================================================================= */
     for (const empId of employeeIds) {
       if (!empId) continue;
@@ -868,7 +870,6 @@ export const assignCampaign = async (req, res) => {
 
       const employeeState = employee?.correspondenceAddress?.state;
 
-      // Validate state match
       const isAllowed =
         allowedStates.includes("All") ||
         (employeeState && allowedStates.includes(employeeState));
@@ -895,14 +896,14 @@ export const assignCampaign = async (req, res) => {
         });
       }
 
-      // Update Employee model
+      // Update employee's assigned campaigns list
       await Employee.findByIdAndUpdate(empId, {
         $addToSet: { assignedCampaigns: campaign._id },
       });
     }
 
     /* =========================================================================
-       ASSIGN RETAILERS — Validate retailer's single shop state
+       ASSIGN RETAILERS
     ========================================================================= */
     for (const retId of retailerIds) {
       if (!retId) continue;
@@ -922,6 +923,7 @@ export const assignCampaign = async (req, res) => {
         });
       }
 
+      // Check duplicate assignment
       const exists = campaign.assignedRetailers.some(
         (r) => r.retailerId.toString() === retId.toString()
       );
@@ -937,6 +939,7 @@ export const assignCampaign = async (req, res) => {
         });
       }
 
+      // Update retailer's assigned campaigns
       await Retailer.findByIdAndUpdate(retId, {
         $addToSet: { assignedCampaigns: campaign._id },
       });
@@ -958,6 +961,7 @@ export const assignCampaign = async (req, res) => {
       }
     }
 
+    // Save updated campaign
     await campaign.save();
 
     res.status(200).json({
@@ -969,6 +973,7 @@ export const assignCampaign = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 export const updateRetailerDates = async (req, res) => {
   try {
