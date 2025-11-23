@@ -1057,13 +1057,16 @@ export const updateEmployeeDates = async (req, res) => {
 ====================================================== */
 export const getAllEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find().select("_id name email");
+    // Fetch all employees with all fields (no select)
+    const employees = await Employee.find();
+
     res.status(200).json({ employees });
   } catch (err) {
     console.error("Get employees error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 /* ======================================================
    FETCH ALL RETAILERS
