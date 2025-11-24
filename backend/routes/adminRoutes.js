@@ -41,11 +41,19 @@ changeEmployeeStatus,
   updateVisitScheduleStatus,
   getEmployeeVisitProgress,
   getCampaignVisitSchedules,
-  bulkRegisterRetailers
+  bulkRegisterRetailers,
+  downloadEmployeeRetailerMappingReport
 } from "../controllers/adminController.js";
 
 const router = express.Router();
+
 const upload = multer({ storage: multer.memoryStorage() });
+router.get(
+  "/campaign/:campaignId/employee-retailer-mapping/download",
+  protect,
+  downloadEmployeeRetailerMappingReport
+);
+
 router.put("/campaigns/:id", protect, updateCampaign);
 router.get("/campaigns/:id",protect,getCampaignById);
 router.post("/login", loginAdmin);
