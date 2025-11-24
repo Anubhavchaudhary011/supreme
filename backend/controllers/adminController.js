@@ -322,6 +322,139 @@ export const registerRetailer = async (req, res) => {
     });
   }
 };
+// Utility to generate unique IDs (since insertMany doesn't run pre-save hooks)
+function generateUniqueId() {
+  const letters = Array.from({ length: 4 }, () =>
+    String.fromCharCode(65 + Math.floor(Math.random() * 26))
+  ).join("");
+  const numbers = Math.floor(1000 + Math.random() * 9000);
+  return `${letters}${numbers}`;
+}
+
+export const bulkRegisterRetailers = async (req, res) => {
+  try {
+    // Only admins can bulk upload retailers
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can upload retailers" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "Excel/CSV file is required" });
+    }
+
+    // Read Excel
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    const retailersToInsert = [];
+
+    for (const row of rows) {
+      const {
+        name,
+        email,
+        contactNo,
+        shopName,
+        businessType,
+        PANCard,
+        shopAddress,
+        shopCity,
+        shopState,
+        shopPincode,
+        bankName,
+        accountNumber,
+        IFSC,
+        branchName
+      } = row;
+
+      // Skip missing required fields
+      if (
+        !name ||
+        !email ||
+        !contactNo ||
+        !shopName ||
+        !businessType ||
+        !PANCard ||
+        !shopAddress ||
+        !shopCity ||
+        !shopState ||
+        !shopPincode ||
+        !bankName ||
+        !accountNumber ||
+        !IFSC ||
+        !branchName
+      ) {
+        continue;
+      }
+
+      // Skip duplicates
+      const exists = await Retailer.findOne({
+        $or: [{ email }, { contactNo }]
+      });
+      if (exists) continue;
+
+      const hashedPassword = await bcrypt.hash(String(contactNo), 10);
+
+      // Build retailer
+      retailersToInsert.push({
+        name,
+        email,
+        contactNo,
+        password: hashedPassword,
+
+        // IMPORTANT — Prevents E11000 error
+        uniqueId: generateUniqueId(),
+        retailerCode: generateUniqueId(),
+
+        gender: row.gender || "",
+        govtIdType: row.govtIdType || "",
+        govtIdNumber: row.govtIdNumber || "",
+
+        shopDetails: {
+          shopName,
+          businessType,
+          PANCard,
+          ownershipType: row.ownershipType || "",
+          GSTNo: row.GSTNo || "",
+          shopAddress: {
+            address: shopAddress,
+            address2: row.shopAddress2 || "",
+            city: shopCity,
+            state: shopState,
+            pincode: shopPincode,
+          }
+        },
+
+        bankDetails: {
+          bankName,
+          accountNumber,
+          IFSC,
+          branchName,
+        },
+
+        createdBy: "AdminAdded", // enum safe value
+        phoneVerified: true,
+        partOfIndia: row.partOfIndia || "N"
+      });
+    }
+
+    if (retailersToInsert.length === 0) {
+      return res.status(400).json({ message: "No valid retailers found to upload" });
+    }
+
+    // Insert many
+    const insertedRetailers = await Retailer.insertMany(retailersToInsert);
+
+    res.status(201).json({
+      message: `${insertedRetailers.length} retailers added successfully`,
+      retailers: insertedRetailers
+    });
+
+  } catch (error) {
+    console.error("Bulk retailer upload error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
 
 /* ======================================================
    ADD CLIENT USER
@@ -781,12 +914,15 @@ export const bulkAddEmployees = async (req, res) => {
       });
       if (exists) continue;
 
-      // Create employee object (employeeId auto-created by schema)
+      // ⭐ HASH PASSWORD (phone number)
+      const hashedPassword = await bcrypt.hash(contactNo.toString(), 10);
+
+      // Create employee object
       employeesToInsert.push({
         name,
         email,
         phone: contactNo,
-        password: contactNo,           // Default password
+        password: hashedPassword,   // << HASHED PASSWORD
         employeeType,
         position,
         gender,
@@ -820,8 +956,6 @@ export const bulkAddEmployees = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
-
 /* ======================================================
    ASSIGN CAMPAIGN TO EMPLOYEES & RETAILERS
 ====================================================== */
@@ -1057,16 +1191,13 @@ export const updateEmployeeDates = async (req, res) => {
 ====================================================== */
 export const getAllEmployees = async (req, res) => {
   try {
-    // Fetch all employees with all fields (no select)
-    const employees = await Employee.find();
-
+    const employees = await Employee.find().select("_id name email");
     res.status(200).json({ employees });
   } catch (err) {
     console.error("Get employees error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 /* ======================================================
    FETCH ALL RETAILERS
@@ -1730,51 +1861,50 @@ export const assignEmployeeToRetailer = async (req, res) => {
       return res.status(404).json({ message: "Campaign not found" });
     }
 
-    // 1️⃣ Retailer must belong to campaign
+    // -------------------------------
+    // 1️⃣ Check retailer is part of campaign
+    // -------------------------------
     const retailerExists = campaign.assignedRetailers.some(
       (r) => r.retailerId.toString() === retailerId.toString()
     );
+
     if (!retailerExists) {
       return res.status(400).json({
         message: "Retailer is not assigned to this campaign"
       });
     }
 
-    // 2️⃣ Employee must belong to campaign
+    // -------------------------------
+    // 2️⃣ Check employee is part of campaign
+    // -------------------------------
     const employeeExists = campaign.assignedEmployees.some(
       (e) => e.employeeId.toString() === employeeId.toString()
     );
+
     if (!employeeExists) {
       return res.status(400).json({
         message: "Employee is not assigned to this campaign"
       });
     }
 
-    // 3️⃣ Prevent employee-retailer duplicate assignment
+    // -------------------------------
+    // 3️⃣ Prevent duplicate mapping
+    // -------------------------------
     const alreadyMapped = campaign.assignedEmployeeRetailers.some(
       (entry) =>
         entry.employeeId.toString() === employeeId.toString() &&
         entry.retailerId.toString() === retailerId.toString()
     );
+
     if (alreadyMapped) {
       return res.status(400).json({
         message: "Employee is already assigned to this retailer"
       });
     }
 
-    // 4️⃣ ❗ Retailer can have only ONE employee
-    const retailerAssignedToAnother = campaign.assignedEmployeeRetailers.some(
-      (entry) =>
-        entry.retailerId.toString() === retailerId.toString() &&
-        entry.employeeId.toString() !== employeeId.toString()
-    );
-    if (retailerAssignedToAnother) {
-      return res.status(400).json({
-        message: "This retailer is already assigned to another employee"
-      });
-    }
-
-    // 5️⃣ Save mapping
+    // -------------------------------
+    // 4️⃣ Save mapping
+    // -------------------------------
     campaign.assignedEmployeeRetailers.push({
       employeeId,
       retailerId,
@@ -1785,19 +1915,18 @@ export const assignEmployeeToRetailer = async (req, res) => {
 
     res.status(200).json({
       message: "Employee assigned to retailer successfully",
-      assignedEmployeeRetailers: campaign.assignedEmployeeRetailers
+      mapping: campaign.assignedEmployeeRetailers
     });
   } catch (err) {
     console.error("Assign employee to retailer error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
-
 export const getCampaignRetailersWithEmployees = async (req, res) => {
   try {
     const { campaignId } = req.params;
 
-    // Fetch full campaign (lean for speed)
+    // Fast, lightweight read
     const campaign = await Campaign.findById(campaignId)
       .select("name client type assignedEmployees assignedRetailers")
       .lean();
@@ -1807,16 +1936,18 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
     }
 
     // -------------------------
-    // RETAILERS - RETURN ALL FIELDS
+    // FAST RETAILER FETCH (IN ONE QUERY)
     // -------------------------
     const retailerIds = campaign.assignedRetailers.map(r => r.retailerId);
 
     const retailers = await Retailer.find({ _id: { $in: retailerIds } })
-      .lean(); // <-- FULL retailer document returned
+      .select("name contactNo email shopDetails")
+      .lean();
 
-    const retailerMeta = {};
+    // Map retailer meta (status, dates)
+    const retailerMap = {};
     campaign.assignedRetailers.forEach(r => {
-      retailerMeta[r.retailerId] = {
+      retailerMap[r.retailerId] = {
         status: r.status,
         assignedAt: r.assignedAt,
         startDate: r.startDate,
@@ -1826,17 +1957,19 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
 
     const finalRetailers = retailers.map(r => ({
       ...r,
-      ...retailerMeta[r._id]
+      ...retailerMap[r._id]
     }));
 
     // -------------------------
-    // EMPLOYEES - RETURN ALL FIELDS
+    // FAST EMPLOYEE FETCH (IN ONE QUERY)
     // -------------------------
     const employeeIds = campaign.assignedEmployees.map(e => e.employeeId);
 
     const employees = await Employee.find({ _id: { $in: employeeIds } })
-      .lean(); // <-- FULL employee document returned
+      .select("name email phone position")
+      .lean();
 
+    // Map employee meta
     const employeeMeta = {};
     campaign.assignedEmployees.forEach(e => {
       employeeMeta[e.employeeId] = {
@@ -1853,7 +1986,7 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
     }));
 
     // -------------------------
-    // FINAL RESPONSE
+    // RESPONSE
     // -------------------------
     res.status(200).json({
       campaignId,
@@ -1873,7 +2006,6 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 export const getEmployeeRetailerMapping = async (req, res) => {
   try {
     const { campaignId } = req.params;
@@ -2125,5 +2257,53 @@ export const updateVisitScheduleStatus = async (req, res) => {
       message: "Server error",
       error: error.message
     });
+  }
+};
+export const getAssignedEmployeeForRetailer = async (req, res) => {
+  try {
+    const { campaignId, retailerId } = req.params;
+
+    // Get the campaign with employee-retailer mapping
+    const campaign = await Campaign.findById(campaignId)
+      .select("assignedEmployeeRetailers")
+      .lean();
+
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found" });
+    }
+
+    // Find the employee mapped to this retailer
+    const mapping = campaign.assignedEmployeeRetailers.find(
+      (m) => m.retailerId.toString() === retailerId.toString()
+    );
+
+    // Retailer not assigned to any employee
+    if (!mapping) {
+      return res.status(200).json({
+        campaignId,
+        retailerId,
+        isAssigned: false,
+        employee: null,
+        message: "No employee assigned to this retailer in this campaign"
+      });
+    }
+
+    // Fetch employee details now
+    const employee = await Employee.findById(mapping.employeeId)
+      .select("name email phone position")
+      .lean();
+
+    res.status(200).json({
+      campaignId,
+      retailerId,
+      isAssigned: true,
+      employee,
+      assignedAt: mapping.assignedAt,
+      message: "Employee assigned to this retailer"
+    });
+
+  } catch (err) {
+    console.error("Error checking assigned employee:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
