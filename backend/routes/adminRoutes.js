@@ -6,6 +6,8 @@ import {
   addClientAdmin,
   addClientUser,
   loginClientAdmin,
+   getAssignedEmployeeForRetailer
+,
   getCampaignById,
   registerRetailer,
   forgotPassword,
@@ -38,7 +40,8 @@ changeEmployeeStatus,
     assignVisitSchedule,
   updateVisitScheduleStatus,
   getEmployeeVisitProgress,
-  getCampaignVisitSchedules
+  getCampaignVisitSchedules,
+  bulkRegisterRetailers
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -60,13 +63,24 @@ router.post(
   protect,
   upload.single("file"),   // file key MUST be "file"
   bulkAddEmployees
+);router.get(
+  "/campaign/:campaignId/retailer/:retailerId/employee",
+  protect,
+  getAssignedEmployeeForRetailer
 );
 
+router.post(
+  "/retailers/bulk",
+  protect,
+  upload.single("file"),
+  bulkRegisterRetailers
+);
 router.get(
   "/campaign/:campaignId/employee-retailer-mapping",
   protect,
   getEmployeeRetailerMapping
 );
+
 
 router.get("/employees", protect, getAllEmployees);
 
