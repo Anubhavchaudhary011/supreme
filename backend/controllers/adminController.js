@@ -2307,3 +2307,81 @@ export const getAssignedEmployeeForRetailer = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const downloadEmployeeRetailerMappingReport = async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+
+    const campaign = await Campaign.findById(campaignId)
+      .select("assignedEmployeeRetailers")
+      .lean();
+
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found" });
+    }
+
+    // Extract all employees & retailers
+    const employeeIds = campaign.assignedEmployeeRetailers.map(m => m.employeeId);
+    const retailerIds = campaign.assignedEmployeeRetailers.map(m => m.retailerId);
+
+    const employees = await Employee.find({ _id: { $in: employeeIds } })
+      .select("name email phone position")
+      .lean();
+
+    const retailers = await Retailer.find({ _id: { $in: retailerIds } })
+      .select("name contactNo shopDetails")
+      .lean();
+
+    const employeeMap = {};
+    employees.forEach(e => (employeeMap[e._id] = e));
+
+    const retailerMap = {};
+    retailers.forEach(r => (retailerMap[r._id] = r));
+
+    // ---------------------------------------------
+    // Build final rows for Excel
+    // ---------------------------------------------
+    const rows = campaign.assignedEmployeeRetailers.map(m => {
+      const emp = employeeMap[m.employeeId];
+      const ret = retailerMap[m.retailerId];
+
+      return {
+        EmployeeName: emp?.name || "",
+        EmployeeEmail: emp?.email || "",
+        EmployeePhone: emp?.phone || "",
+        EmployeePosition: emp?.position || "",
+
+        RetailerName: ret?.name || "",
+        RetailerContact: ret?.contactNo || "",
+        ShopName: ret?.shopDetails?.shopName || "",
+        ShopCity: ret?.shopDetails?.shopAddress?.city || "",
+        ShopState: ret?.shopDetails?.shopAddress?.state || "",
+
+        AssignedAt: new Date(m.assignedAt).toLocaleString()
+      };
+    });
+
+    // Create Excel sheet
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Employee-Retailer-Mapping");
+
+    const excelBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+    // Send file
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=employee_retailer_mapping_${campaignId}.xlsx`
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    return res.end(excelBuffer);
+
+  } catch (err) {
+    console.error("Download mapping report error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
