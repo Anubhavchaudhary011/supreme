@@ -1926,7 +1926,7 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
   try {
     const { campaignId } = req.params;
 
-    // Fast, lightweight read
+    // Fetch full campaign data including assignedEmployees & assignedRetailers
     const campaign = await Campaign.findById(campaignId)
       .select("name client type assignedEmployees assignedRetailers")
       .lean();
@@ -1935,19 +1935,18 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
       return res.status(404).json({ message: "Campaign not found" });
     }
 
-    // -------------------------
-    // FAST RETAILER FETCH (IN ONE QUERY)
-    // -------------------------
+    /* ============================================================
+       FETCH FULL RETAILER DOCUMENTS (no field restriction)
+    ============================================================ */
     const retailerIds = campaign.assignedRetailers.map(r => r.retailerId);
 
     const retailers = await Retailer.find({ _id: { $in: retailerIds } })
-      .select("name contactNo email shopDetails")
-      .lean();
+      .lean();  // FULL RETAILER DATA
 
-    // Map retailer meta (status, dates)
-    const retailerMap = {};
+    // Build meta map
+    const retailerMeta = {};
     campaign.assignedRetailers.forEach(r => {
-      retailerMap[r.retailerId] = {
+      retailerMeta[r.retailerId] = {
         status: r.status,
         assignedAt: r.assignedAt,
         startDate: r.startDate,
@@ -1955,21 +1954,21 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
       };
     });
 
+    // Merge full retailer data + assignment meta
     const finalRetailers = retailers.map(r => ({
       ...r,
-      ...retailerMap[r._id]
+      ...retailerMeta[r._id]
     }));
 
-    // -------------------------
-    // FAST EMPLOYEE FETCH (IN ONE QUERY)
-    // -------------------------
+    /* ============================================================
+       FETCH FULL EMPLOYEE DOCUMENTS (no field restriction)
+    ============================================================ */
     const employeeIds = campaign.assignedEmployees.map(e => e.employeeId);
 
     const employees = await Employee.find({ _id: { $in: employeeIds } })
-      .select("name email phone position")
-      .lean();
+      .lean(); // FULL EMPLOYEE DATA
 
-    // Map employee meta
+    // Build meta map
     const employeeMeta = {};
     campaign.assignedEmployees.forEach(e => {
       employeeMeta[e.employeeId] = {
@@ -1980,14 +1979,15 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
       };
     });
 
+    // Merge full employee data + assignment meta
     const finalEmployees = employees.map(e => ({
       ...e,
       ...employeeMeta[e._id]
     }));
 
-    // -------------------------
-    // RESPONSE
-    // -------------------------
+    /* ============================================================
+       FINAL RESPONSE (everything passed to frontend)
+    ============================================================ */
     res.status(200).json({
       campaignId,
       campaignName: campaign.name,
@@ -1997,8 +1997,8 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
       totalRetailers: finalRetailers.length,
       totalEmployees: finalEmployees.length,
 
-      retailers: finalRetailers,
-      employees: finalEmployees
+      retailers: finalRetailers,   // FULL retailer objects
+      employees: finalEmployees    // FULL employee objects
     });
 
   } catch (err) {
@@ -2006,6 +2006,7 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 export const getEmployeeRetailerMapping = async (req, res) => {
   try {
     const { campaignId } = req.params;
@@ -2019,31 +2020,28 @@ export const getEmployeeRetailerMapping = async (req, res) => {
     }
 
     // --------------------------------------------
-    // Get all employees in the mapping
+    // Fetch ALL employees (full documents)
     // --------------------------------------------
     const employeeIds = campaign.assignedEmployeeRetailers.map(m => m.employeeId);
 
     const employees = await Employee.find({ _id: { $in: employeeIds } })
-      .select("name email phone position")
-      .lean();
+      .lean(); //  <-- FULL EMPLOYEE DOC
 
-    // Convert employees into a lookup map
     const employeeMap = {};
     employees.forEach(e => {
       employeeMap[e._id] = { 
-        ...e,
-        retailers: []     // list of retailers will be pushed here
+        ...e,    // all fields of employee
+        retailers: []
       };
     });
 
     // --------------------------------------------
-    // Get all retailers in the mapping
+    // Fetch ALL retailers (full documents)
     // --------------------------------------------
     const retailerIds = campaign.assignedEmployeeRetailers.map(m => m.retailerId);
 
     const retailers = await Retailer.find({ _id: { $in: retailerIds } })
-      .select("name contactNo shopDetails")
-      .lean();
+      .lean();   // <-- FULL RETAILER DOC
 
     const retailerMap = {};
     retailers.forEach(r => {
@@ -2051,7 +2049,7 @@ export const getEmployeeRetailerMapping = async (req, res) => {
     });
 
     // --------------------------------------------
-    // Build Mapping: employee → [retailers]
+    // Build mapping: employee → list of retailers
     // --------------------------------------------
     campaign.assignedEmployeeRetailers.forEach(mapping => {
       const eId = mapping.employeeId;
@@ -2059,7 +2057,7 @@ export const getEmployeeRetailerMapping = async (req, res) => {
 
       if (employeeMap[eId]) {
         employeeMap[eId].retailers.push({
-          ...retailerMap[rId],
+          ...retailerMap[rId],          // full retailer data
           assignedAt: mapping.assignedAt
         });
       }
@@ -2071,7 +2069,7 @@ export const getEmployeeRetailerMapping = async (req, res) => {
     res.status(200).json({
       campaignId,
       totalEmployees: Object.keys(employeeMap).length,
-      employees: Object.values(employeeMap)
+      employees: Object.values(employeeMap) // full employees with full retailers list
     });
 
   } catch (err) {
