@@ -2487,3 +2487,61 @@ export const getReportsByEmployeeId = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+export const updateVisitScheduleDetails = async (req, res) => {
+  try {
+    const { scheduleId } = req.params;
+
+    const {
+      campaignId,
+      employeeId,
+      retailerId,
+      visitDate,
+      visitType,
+      notes,
+      isRecurring,
+      recurrenceInterval,
+      lastVisitDate
+    } = req.body;
+
+    const schedule = await VisitSchedule.findById(scheduleId);
+
+    if (!schedule) {
+      return res.status(404).json({ message: "Visit schedule not found" });
+    }
+
+    // Update fields only if provided
+    if (campaignId) schedule.campaignId = campaignId;
+    if (employeeId) schedule.employeeId = employeeId;
+    if (retailerId) schedule.retailerId = retailerId;
+    if (visitDate) schedule.visitDate = visitDate;
+    if (visitType) schedule.visitType = visitType;
+    if (notes) schedule.notes = notes;
+
+    // Recurring updates
+    if (isRecurring) schedule.isRecurring = isRecurring;
+
+    if (isRecurring === "Yes") {
+      if (recurrenceInterval) schedule.recurrenceInterval = recurrenceInterval;
+    } else {
+      schedule.recurrenceInterval = null;
+    }
+
+    if (lastVisitDate) {
+      schedule.lastVisitDate = lastVisitDate;
+    }
+
+    await schedule.save();
+
+    res.status(200).json({
+      message: "Visit schedule updated successfully",
+      schedule
+    });
+
+  } catch (error) {
+    console.error("updateVisitScheduleDetails Error:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
