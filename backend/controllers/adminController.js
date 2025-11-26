@@ -1192,7 +1192,9 @@ export const updateEmployeeDates = async (req, res) => {
 ====================================================== */
 export const getAllEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find().select("_id name email");
+    // Fetch ALL employees with ALL fields
+    const employees = await Employee.find().lean();  // full fields
+
     res.status(200).json({ employees });
   } catch (err) {
     console.error("Get employees error:", err);
@@ -1205,8 +1207,8 @@ export const getAllEmployees = async (req, res) => {
 ====================================================== */
 export const getAllRetailers = async (req, res) => {
   try {
-    // Return the FULL retailer object with all nested fields
-    const retailers = await Retailer.find();  
+    // Fetch ALL retailers with ALL fields
+    const retailers = await Retailer.find().lean();  // full fields
 
     res.status(200).json({ retailers });
   } catch (err) {
@@ -1214,6 +1216,7 @@ export const getAllRetailers = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 /* ======================================================
    ADMIN UPDATES PAYMENT PROGRESS & UTR
 ====================================================== */
