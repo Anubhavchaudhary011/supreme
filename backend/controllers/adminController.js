@@ -7,7 +7,8 @@ import {
   Retailer,
   Employee,
   Campaign,
-  Payment 
+  Payment ,
+  EmployeeReport
 
 } from "../models/user.js";
 import bcrypt from "bcryptjs";
@@ -2079,7 +2080,17 @@ export const getEmployeeRetailerMapping = async (req, res) => {
 };
 export const assignVisitSchedule = async (req, res) => {
   try {
-    const { campaignId, employeeId, retailerId, visitDate, visitType, notes } = req.body;
+    const { 
+      campaignId, 
+      employeeId, 
+      retailerId, 
+      visitDate, 
+      visitType, 
+      notes,
+      isRecurring,
+      recurrenceInterval,
+      lastVisitDate
+    } = req.body;
 
     if (!campaignId || !employeeId || !retailerId || !visitDate) {
       return res.status(400).json({ message: "Missing required fields" });
@@ -2088,7 +2099,7 @@ export const assignVisitSchedule = async (req, res) => {
     const campaign = await Campaign.findById(campaignId).lean();
     if (!campaign) return res.status(404).json({ message: "Campaign not found" });
 
-    // Check Employee belongs to campaign
+    // Check employee assigned
     const employeeExists = campaign.assignedEmployees.some(
       e => e.employeeId.toString() === employeeId
     );
@@ -2096,7 +2107,7 @@ export const assignVisitSchedule = async (req, res) => {
       return res.status(400).json({ message: "Employee not assigned to campaign" });
     }
 
-    // Check Retailer belongs to campaign
+    // Check retailer assigned
     const retailerExists = campaign.assignedRetailers.some(
       r => r.retailerId.toString() === retailerId
     );
@@ -2104,7 +2115,7 @@ export const assignVisitSchedule = async (req, res) => {
       return res.status(400).json({ message: "Retailer not assigned to campaign" });
     }
 
-    // Check Mapping exists
+    // Check employee-retailer mapping
     const mappingExists = campaign.assignedEmployeeRetailers.some(
       m =>
         m.employeeId.toString() === employeeId &&
@@ -2117,14 +2128,19 @@ export const assignVisitSchedule = async (req, res) => {
       });
     }
 
-    // Create Visit schedule
+    // Create schedule
     const visit = await VisitSchedule.create({
       campaignId,
       employeeId,
       retailerId,
       visitDate,
       visitType,
-      notes
+      notes,
+
+      // NEW FIELDS
+      isRecurring: isRecurring || "No",
+      recurrenceInterval: isRecurring === "Yes" ? recurrenceInterval : null,
+      lastVisitDate: lastVisitDate || null
     });
 
     res.status(201).json({
@@ -2143,7 +2159,8 @@ export const getCampaignVisitSchedules = async (req, res) => {
     const visits = await VisitSchedule.find({ campaignId })
       .populate("employeeId", "name phone position")
       .populate("retailerId", "name contactNo shopDetails")
-      .sort({ visitDate: 1 });
+      .sort({ visitDate: 1 })
+      .lean();
 
     res.status(200).json({
       campaignId,
@@ -2162,7 +2179,8 @@ export const getEmployeeVisitSchedule = async (req, res) => {
     const visits = await VisitSchedule.find({ employeeId })
       .populate("campaignId", "name type")
       .populate("retailerId", "name contactNo")
-      .sort({ visitDate: 1 });
+      .sort({ visitDate: 1 })
+      .lean();
 
     res.status(200).json({
       employeeId,
@@ -2174,6 +2192,49 @@ export const getEmployeeVisitSchedule = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+export const updateVisitScheduleStatus = async (req, res) => {
+  try {
+    const employeeId = req.user.id;
+    const { scheduleId } = req.params;
+    const { status } = req.body;
+
+    const { VisitSchedule } = await import("../models/VisitSchedule.js");
+
+    if (!["Completed", "Missed", "Cancelled"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status value" });
+    }
+
+    const schedule = await VisitSchedule.findOne({
+      _id: scheduleId,
+      employeeId
+    });
+
+    if (!schedule) {
+      return res.status(404).json({ message: "Visit schedule not found" });
+    }
+
+    schedule.status = status;
+    schedule.updatedAt = new Date();
+
+    // NEW → update lastVisitDate when completed
+    if (status === "Completed") {
+      schedule.lastVisitDate = new Date();
+    }
+
+    await schedule.save();
+
+    res.status(200).json({
+      message: "Visit schedule status updated successfully",
+      schedule
+    });
+  } catch (error) {
+    console.error("updateVisitScheduleStatus Error:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
 export const getEmployeeVisitProgress = async (req, res) => {
   try {
     const employeeId = req.user.id;
@@ -2183,7 +2244,6 @@ export const getEmployeeVisitProgress = async (req, res) => {
     const { campaignId } = req.query;
 
     const filter = { employeeId };
-
     if (campaignId) filter.campaignId = campaignId;
 
     const visits = await VisitSchedule.find(filter).lean();
@@ -2218,45 +2278,7 @@ export const getEmployeeVisitProgress = async (req, res) => {
     });
   }
 };
-export const updateVisitScheduleStatus = async (req, res) => {
-  try {
-    const employeeId = req.user.id; // employee logged in
-    const { scheduleId } = req.params;
-    const { status } = req.body;
 
-    const { VisitSchedule } = await import("../models/VisitSchedule.js");
-
-    if (!["Completed", "Missed", "Cancelled"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status value" });
-    }
-
-    const schedule = await VisitSchedule.findOne({
-      _id: scheduleId,
-      employeeId: employeeId, // ensure employee owns this schedule
-    });
-
-    if (!schedule) {
-      return res.status(404).json({ message: "Visit schedule not found" });
-    }
-
-    schedule.status = status;
-    schedule.updatedAt = new Date();
-
-    await schedule.save();
-
-    res.status(200).json({
-      message: "Visit schedule status updated successfully",
-      schedule,
-    });
-
-  } catch (error) {
-    console.error("updateVisitScheduleStatus Error:", error);
-    res.status(500).json({
-      message: "Server error",
-      error: error.message
-    });
-  }
-};
 export const getAssignedEmployeeForRetailer = async (req, res) => {
   try {
     const { campaignId, retailerId } = req.params;
@@ -2380,6 +2402,88 @@ export const downloadEmployeeRetailerMappingReport = async (req, res) => {
 
   } catch (err) {
     console.error("Download mapping report error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+/* ======================================================
+   GET ALL REPORTS OF LOGGED-IN EMPLOYEE (WITH FILTERS)
+====================================================== */
+export const getAllEmployeeReports = async (req, res) => {
+  try {
+    const employeeId = req.user.id;
+
+    const { 
+      campaignId, 
+      retailerId, 
+      fromDate, 
+      toDate 
+    } = req.query;
+
+    // 🔥 Build dynamic filter
+    const filter = { employeeId };
+
+    if (campaignId) filter.campaignId = campaignId;
+    if (retailerId) filter.retailerId = retailerId;
+
+    // Date-range filter
+    if (fromDate || toDate) {
+      filter.createdAt = {};
+      if (fromDate) filter.createdAt.$gte = new Date(fromDate);
+      if (toDate) filter.createdAt.$lte = new Date(toDate);
+    }
+
+    const reports = await EmployeeReport.find(filter)
+      .populate("campaignId", "name type")
+      .populate("retailerId", "name contactNo shopDetails")
+      .populate("visitScheduleId", "visitDate status visitType")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!reports.length) {
+      return res.status(200).json({
+        message: "No reports found",
+        totalReports: 0,
+        reports: []
+      });
+    }
+
+    res.status(200).json({
+      message: "Employee reports fetched successfully",
+      totalReports: reports.length,
+      reports
+    });
+
+  } catch (error) {
+    console.error("Get all employee reports error:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
+export const getReportsByEmployeeId = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    if (!employeeId) {
+      return res.status(400).json({ message: "employeeId is required" });
+    }
+
+    const reports = await EmployeeReport.find({ employeeId })
+      .populate("campaignId", "name type")
+      .populate("retailerId", "name contactNo shopDetails")
+      .populate("employeeId", "name email phone position")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json({
+      message: "Reports fetched successfully",
+      totalReports: reports.length,
+      reports,
+    });
+
+  } catch (err) {
+    console.error("Error fetching employee reports:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
