@@ -2545,3 +2545,32 @@ export const updateVisitScheduleDetails = async (req, res) => {
     });
   }
 };
+export const deleteVisitSchedule = async (req, res) => {
+  try {
+    const { scheduleId } = req.params;
+
+    if (!scheduleId) {
+      return res.status(400).json({ message: "scheduleId is required" });
+    }
+
+    const schedule = await VisitSchedule.findById(scheduleId);
+
+    if (!schedule) {
+      return res.status(404).json({ message: "Visit schedule not found" });
+    }
+
+    await VisitSchedule.deleteOne({ _id: scheduleId });
+
+    res.status(200).json({
+      message: "Visit schedule deleted successfully",
+      deletedScheduleId: scheduleId
+    });
+
+  } catch (error) {
+    console.error("Delete visit schedule error:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
