@@ -43,7 +43,8 @@ changeEmployeeStatus,
   getCampaignVisitSchedules,
   bulkRegisterRetailers,
   downloadEmployeeRetailerMappingReport,
-   getAllEmployeeReports
+   getAllEmployeeReports,
+    updateVisitScheduleDetails
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -169,5 +170,10 @@ router.get(
 
 // ===========================================
 router.get("/employee/reports", protect, getAllEmployeeReports);
+router.put(
+  "/visit-schedule/update/:scheduleId",
+  protect,     // if employee or admin protected route
+  updateVisitScheduleDetails
+);
 
 export default router;
