@@ -768,9 +768,32 @@ const visitScheduleSchema = new Schema(
     assignedAt: {
       type: Date,
       default: Date.now
+    },
+
+
+
+    // Yes / No dropdown
+    isRecurring: {
+      type: String,
+      enum: ["Yes", "No"],
+      default: "No"
+    },
+
+   
+    recurrenceInterval: {
+      type: String,
+      enum: ["Daily", "Weekly", "Fortnightly", "Monthly"],
+      default: null
+    },
+
+   
+    lastVisitDate: {
+      type: Date,
+      default: null
     }
   },
   { timestamps: true }
 );
 
 export const VisitSchedule = model("VisitSchedule", visitScheduleSchema);
+
