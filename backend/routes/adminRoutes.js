@@ -42,7 +42,8 @@ changeEmployeeStatus,
   getEmployeeVisitProgress,
   getCampaignVisitSchedules,
   bulkRegisterRetailers,
-  downloadEmployeeRetailerMappingReport
+  downloadEmployeeRetailerMappingReport,
+   getAllEmployeeReports
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -167,4 +168,6 @@ router.get(
 );
 
 // ===========================================
+router.get("/employee/reports", protect, getAllEmployeeReports);
+
 export default router;
