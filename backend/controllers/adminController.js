@@ -1927,7 +1927,6 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
   try {
     const { campaignId } = req.params;
 
-    // Fetch full campaign data including assignedEmployees & assignedRetailers
     const campaign = await Campaign.findById(campaignId)
       .select("name client type assignedEmployees assignedRetailers")
       .lean();
@@ -1936,15 +1935,14 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
       return res.status(404).json({ message: "Campaign not found" });
     }
 
-    /* ============================================================
-       FETCH FULL RETAILER DOCUMENTS (no field restriction)
-    ============================================================ */
+    // -------------------------
+    // FULL RETAILER FETCH
+    // -------------------------
     const retailerIds = campaign.assignedRetailers.map(r => r.retailerId);
 
     const retailers = await Retailer.find({ _id: { $in: retailerIds } })
-      .lean();  // FULL RETAILER DATA
+      .lean();  // FULL retailer fields
 
-    // Build meta map
     const retailerMeta = {};
     campaign.assignedRetailers.forEach(r => {
       retailerMeta[r.retailerId] = {
@@ -1955,21 +1953,19 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
       };
     });
 
-    // Merge full retailer data + assignment meta
     const finalRetailers = retailers.map(r => ({
       ...r,
       ...retailerMeta[r._id]
     }));
 
-    /* ============================================================
-       FETCH FULL EMPLOYEE DOCUMENTS (no field restriction)
-    ============================================================ */
+    // -------------------------
+    // FULL EMPLOYEE FETCH
+    // -------------------------
     const employeeIds = campaign.assignedEmployees.map(e => e.employeeId);
 
     const employees = await Employee.find({ _id: { $in: employeeIds } })
-      .lean(); // FULL EMPLOYEE DATA
+      .lean();  // FULL employee fields
 
-    // Build meta map
     const employeeMeta = {};
     campaign.assignedEmployees.forEach(e => {
       employeeMeta[e.employeeId] = {
@@ -1980,15 +1976,14 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
       };
     });
 
-    // Merge full employee data + assignment meta
     const finalEmployees = employees.map(e => ({
       ...e,
       ...employeeMeta[e._id]
     }));
 
-    /* ============================================================
-       FINAL RESPONSE (everything passed to frontend)
-    ============================================================ */
+    // -------------------------
+    // RESPONSE
+    // -------------------------
     res.status(200).json({
       campaignId,
       campaignName: campaign.name,
@@ -1998,8 +1993,8 @@ export const getCampaignRetailersWithEmployees = async (req, res) => {
       totalRetailers: finalRetailers.length,
       totalEmployees: finalEmployees.length,
 
-      retailers: finalRetailers,   // FULL retailer objects
-      employees: finalEmployees    // FULL employee objects
+      retailers: finalRetailers,
+      employees: finalEmployees
     });
 
   } catch (err) {
