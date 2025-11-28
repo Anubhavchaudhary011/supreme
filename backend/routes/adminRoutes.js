@@ -46,7 +46,9 @@ changeEmployeeStatus,
   downloadEmployeeRetailerMappingReport,
    getAllEmployeeReports,
     updateVisitScheduleDetails,
-    deleteVisitSchedule
+    deleteVisitSchedule,
+    createAdminReport,
+    updateEmployeeReport
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -69,6 +71,8 @@ router.post("/client-admin-login", loginClientAdmin);
 
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
+router.post("/admin/reports", protect, createAdminReport);
+router.put("/reports/:reportId", protect, updateEmployeeReport);
 
 router.post("/employees", protect, addEmployee);
 router.post(
