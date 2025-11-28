@@ -781,6 +781,11 @@ const visitScheduleSchema = new Schema(
       enum: ["Daily", "Weekly", "Fortnightly", "Monthly"],
       default: null
     },
+   status: {
+      type: String,
+      enum: ["Scheduled", "Completed", "Missed", "Cancelled"],
+      default: "Scheduled"
+    },
 
    
     lastVisitDate: {
