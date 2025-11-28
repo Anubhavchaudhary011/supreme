@@ -29,6 +29,7 @@ import {
   updateJobPosting,
   getAdminJobs,
   createJobPosting,
+  getCampaignPayments,
   getJobApplications,
   updateApplicationStatus,
   getCandidateResume,
@@ -49,6 +50,7 @@ changeEmployeeStatus,
 } from "../controllers/adminController.js";
 
 const router = express.Router();
+router.get("/campaign/:campaignId/payments",protect, getCampaignPayments);
 
 const upload = multer({ storage: multer.memoryStorage() });
 router.get(
