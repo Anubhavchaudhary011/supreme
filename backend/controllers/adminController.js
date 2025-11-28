@@ -1,4 +1,3 @@
-
 import {
   Admin,
   VisitSchedule,
@@ -192,7 +191,7 @@ export const registerRetailer = async (req, res) => {
     } = body;
 
     /* ----------------------------------------------------
-       🔍 STEP 1: Validate required fields
+       STEP 1: Validate required fields
     ---------------------------------------------------- */
     if (
       !name ||
@@ -757,7 +756,6 @@ export const deleteCampaign = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 /* ======================================================
    EMPLOYEE MANAGEMENT
 ====================================================== */
@@ -1300,6 +1298,127 @@ export const getCampaignPayments = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+export const createAdminReport = async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can submit admin reports" });
+    }
+
+    const {
+      employeeId,
+      campaignId,
+      retailerId,
+      visitScheduleId,
+      reportType,
+      notes,
+      stockType,
+      brand,
+      product,
+      sku,
+      productType,
+      quantity,
+      location
+    } = req.body;
+
+    if (!employeeId || !campaignId || !retailerId) {
+      return res.status(400).json({
+        message: "employeeId, campaignId, and retailerId are required"
+      });
+    }
+
+    const report = await EmployeeReport.create({
+      employeeId,
+      campaignId,
+      retailerId,
+      visitScheduleId,
+      reportType,
+      otherReasonText: notes,
+
+      stockType,
+      brand,
+      product,
+      sku,
+      productType,
+      quantity,
+
+      location,
+
+      submittedByRole: "Admin",
+      submittedByAdmin: req.user.id
+    });
+
+    res.status(201).json({
+      message: "Admin report submitted successfully",
+      report
+    });
+
+  } catch (err) {
+    console.error("Create admin report error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+export const updateEmployeeReport = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+
+    const report = await EmployeeReport.findById(reportId);
+    if (!report) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+
+    // Only admin or the employee who submitted it can update
+    const isAdmin = req.user.role === "admin";
+    const isOwner = req.user.id === report.submittedByEmployee?.toString();
+
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({
+        message: "You do not have permission to update this report"
+      });
+    }
+
+    // Update allowed fields
+    const fields = [
+      "visitType", "attended", "notVisitedReason", "otherReasonText",
+      "reportType", "frequency", "fromDate", "toDate", "extraField",
+      "stockType", "brand", "product", "sku", "productType", "quantity",
+      "location"
+    ];
+
+    fields.forEach(f => {
+      if (req.body[f] !== undefined) report[f] = req.body[f];
+    });
+
+    // Image update (optional)
+    if (req.files?.images) {
+      report.images = req.files.images.map(img => ({
+        data: img.buffer,
+        contentType: img.mimetype,
+        fileName: img.originalname
+      }));
+    }
+
+    if (req.files?.billCopy) {
+      const file = req.files.billCopy[0];
+      report.billCopy = {
+        data: file.buffer,
+        contentType: file.mimetype,
+        fileName: file.originalname
+      };
+    }
+
+    await report.save();
+
+    res.status(200).json({
+      message: "Report updated successfully",
+      report
+    });
+
+  } catch (error) {
+    console.error("Update report error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 /* ======================================================
    CREATE JOB POSTING (admin)
    POST /admin/career/jobs
