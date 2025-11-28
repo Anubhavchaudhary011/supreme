@@ -755,11 +755,7 @@ const visitScheduleSchema = new Schema(
       default: "Visit"
     },
 
-    status: {
-      type: String,
-      enum: ["Scheduled", "Completed", "Missed", "Cancelled"],
-      default: "Scheduled"
-    },
+
 
     notes: {
       type: String
