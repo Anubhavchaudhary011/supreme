@@ -2527,28 +2527,45 @@ export const downloadEmployeeRetailerMappingReport = async (req, res) => {
 ====================================================== */
 export const getAllEmployeeReports = async (req, res) => {
   try {
-    const employeeId = req.user.id;
+    console.log("============================");
+    console.log("🔍 ENTERED GET ALL REPORTS");
+    console.log("JWT User:", req.user);
+    console.log("Query Params:", req.query);
+    console.log("============================");
 
-    const { 
-      campaignId, 
-      retailerId, 
-      fromDate, 
-      toDate 
+    const { role, id: userId } = req.user;
+    const {
+      employeeId,
+      campaignId,
+      retailerId,
+      fromDate,
+      toDate
     } = req.query;
 
-    // 🔥 Build dynamic filter
-    const filter = { employeeId };
+    // -------------------------------
+    // BUILD FILTER
+    // -------------------------------
+    const filter = {};
 
+    if (role === "employee") {
+      filter.employeeId = userId;
+    }
+
+    if (employeeId) filter.employeeId = employeeId;
     if (campaignId) filter.campaignId = campaignId;
     if (retailerId) filter.retailerId = retailerId;
 
-    // Date-range filter
     if (fromDate || toDate) {
       filter.createdAt = {};
       if (fromDate) filter.createdAt.$gte = new Date(fromDate);
       if (toDate) filter.createdAt.$lte = new Date(toDate);
     }
 
+    console.log("🔥 FINAL FILTER USED:", filter);
+
+    // -------------------------------
+    // RUN QUERY
+    // -------------------------------
     const reports = await EmployeeReport.find(filter)
       .populate("campaignId", "name type")
       .populate("retailerId", "name contactNo shopDetails")
@@ -2556,7 +2573,13 @@ export const getAllEmployeeReports = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    console.log("📌 REPORTS FOUND:", reports.length);
+    console.log("📌 FIRST REPORT (if any):", reports[0]);
+
     if (!reports.length) {
+      console.log("❌ NO REPORTS FOUND WITH THIS FILTER!");
+      console.log("============================");
+
       return res.status(200).json({
         message: "No reports found",
         totalReports: 0,
@@ -2564,20 +2587,24 @@ export const getAllEmployeeReports = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    console.log("✔ REPORTS RETURNED SUCCESSFULLY");
+    console.log("============================");
+
+    return res.status(200).json({
       message: "Employee reports fetched successfully",
       totalReports: reports.length,
       reports
     });
 
   } catch (error) {
-    console.error("Get all employee reports error:", error);
-    res.status(500).json({
+    console.error("❌ ERROR IN GET ALL REPORTS:", error);
+    return res.status(500).json({
       message: "Server error",
       error: error.message
     });
   }
 };
+
 export const getReportsByEmployeeId = async (req, res) => {
   try {
     const { employeeId } = req.params;
