@@ -48,7 +48,8 @@ changeEmployeeStatus,
     updateVisitScheduleDetails,
     deleteVisitSchedule,
     createAdminReport,
-    updateEmployeeReport
+    updateEmployeeReport,
+    deleteEmployeeReport
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -188,5 +189,6 @@ router.delete(
   deleteVisitSchedule
 );
 
+router.delete("/reports/:reportId", protect, deleteEmployeeReport);
 
 export default router;
