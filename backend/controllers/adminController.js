@@ -2715,3 +2715,41 @@ export const deleteVisitSchedule = async (req, res) => {
     });
   }
 };
+export const deleteEmployeeReport = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+
+    // Validate admin
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({
+        message: "Only admins can delete reports"
+      });
+    }
+
+    // Validate ID
+    if (!mongoose.Types.ObjectId.isValid(reportId)) {
+      return res.status(400).json({ message: "Invalid report ID" });
+    }
+
+    // Check if exists
+    const report = await EmployeeReport.findById(reportId);
+    if (!report) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+
+    // Delete the report
+    await EmployeeReport.deleteOne({ _id: reportId });
+
+    return res.status(200).json({
+      message: "Report deleted successfully",
+      deletedReportId: reportId
+    });
+
+  } catch (error) {
+    console.error("Delete Employee Report Error:", error);
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
