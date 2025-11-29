@@ -2538,24 +2538,21 @@ export const getAllEmployeeReports = async (req, res) => {
     } = req.query;
 
     // ----------------------------------------------------
-    // 🔥 Build dynamic filter
+    // Build Filter
     // ----------------------------------------------------
     const filter = {};
 
-    // Employees can see ONLY their own reports
+    // Employees can only view their own reports
     if (role === "employee") {
       filter.employeeId = userId;
     }
 
-    // Admin / Client Admin can filter by employeeId
-    if (employeeId) {
-      filter.employeeId = employeeId;
-    }
-
+    // Admin / Client Admin filters
+    if (employeeId) filter.employeeId = employeeId;
     if (campaignId) filter.campaignId = campaignId;
     if (retailerId) filter.retailerId = retailerId;
 
-    // Date-range filter
+    // Date filter
     if (fromDate || toDate) {
       filter.createdAt = {};
       if (fromDate) filter.createdAt.$gte = new Date(fromDate);
@@ -2563,19 +2560,19 @@ export const getAllEmployeeReports = async (req, res) => {
     }
 
     // ----------------------------------------------------
-    // 🔥 Query DB with Full Population
+    // Query Reports with POPULATE
     // ----------------------------------------------------
     const reports = await EmployeeReport.find(filter)
-      .populate("employeeId", "name email phone")       // ⭐ FIX ADDED
-      .populate("campaignId", "name type")
-      .populate("retailerId", "name contactNo shopDetails")
+      .populate("employeeId", "name email phone position")
+      .populate("campaignId", "name type client")
+      .populate(
+        "retailerId",
+        "name uniqueId retailerCode contactNo shopDetails"
+      )
       .populate("visitScheduleId", "visitDate status visitType")
       .sort({ createdAt: -1 })
       .lean();
 
-    // ----------------------------------------------------
-    // 🔥 No Reports Found
-    // ----------------------------------------------------
     if (!reports.length) {
       return res.status(200).json({
         message: "No reports found",
@@ -2585,12 +2582,45 @@ export const getAllEmployeeReports = async (req, res) => {
     }
 
     // ----------------------------------------------------
-    // 🔥 Success Response
+    // FLATTEN RETAILER DETAILS (⭐ important for frontend)
+    // ----------------------------------------------------
+    const finalReports = reports.map(r => ({
+      ...r,
+
+      // Employee
+      employeeName: r.employeeId?.name || "",
+      employeePhone: r.employeeId?.phone || "",
+      employeeEmail: r.employeeId?.email || "",
+
+      // Retailer
+      retailerName: r.retailerId?.name || "",
+      retailerUniqueId: r.retailerId?.uniqueId || "",
+      retailerCode: r.retailerId?.retailerCode || "",
+      retailerContact: r.retailerId?.contactNo || "",
+      shopName: r.retailerId?.shopDetails?.shopName || "",
+
+      shopCity: r.retailerId?.shopDetails?.shopAddress?.city || "",
+      shopState: r.retailerId?.shopDetails?.shopAddress?.state || "",
+      shopPincode: r.retailerId?.shopDetails?.shopAddress?.pincode || "",
+
+      // Campaign
+      campaignName: r.campaignId?.name || "",
+      campaignType: r.campaignId?.type || "",
+      clientName: r.campaignId?.client || "",
+
+      // Visit Schedule
+      visitDate: r.visitScheduleId?.visitDate || null,
+      visitStatus: r.visitScheduleId?.status || "",
+      visitType: r.visitScheduleId?.visitType || "",
+    }));
+
+    // ----------------------------------------------------
+    // SUCCESS RESPONSE
     // ----------------------------------------------------
     res.status(200).json({
       message: "Employee reports fetched successfully",
-      totalReports: reports.length,
-      reports
+      totalReports: finalReports.length,
+      reports: finalReports
     });
 
   } catch (error) {
@@ -2715,6 +2745,10 @@ export const deleteVisitSchedule = async (req, res) => {
     });
   }
 };
+/* ======================================================
+   DELETE EMPLOYEE REPORT (ADMIN ONLY)
+   DELETE /api/reports/:reportId
+====================================================== */
 export const deleteEmployeeReport = async (req, res) => {
   try {
     const { reportId } = req.params;
