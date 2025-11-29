@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { ClientAdmin, ClientUser, Campaign, Payment } from "../models/user.js";
+import { ClientAdmin, ClientUser, Campaign, Payment ,EmployeeReport } from "../models/user.js";
 
 /* ===========================
    CLIENT ADMIN LOGIN
@@ -8,47 +8,23 @@ import { ClientAdmin, ClientUser, Campaign, Payment } from "../models/user.js";
 export const loginClientAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password)
-      return res.status(400).json({ message: "Email and password are required" });
-
     const admin = await ClientAdmin.findOne({ email });
-    if (!admin)
-      return res.status(404).json({ message: "Client Admin not found" });
+    if (!admin) return res.status(404).json({ message: "Client Admin not found" });
 
     const isMatch = await bcrypt.compare(password, admin.password);
-    if (!isMatch)
-      return res.status(400).json({ message: "Invalid credentials" });
-
-    // ✅ Use JWT_SECRET strictly
-    if (!process.env.JWT_SECRET) {
-      console.error("❌ JWT_SECRET is missing in environment variables");
-      return res.status(500).json({ message: "Server configuration error" });
-    }
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
     const token = jwt.sign(
-      { id: admin._id, email: admin.email, role: "client-admin" },
-      process.env.JWT_SECRET,             // ✅ from .env
+      { id: admin._id, role: "client_admin" },
+      process.env.JWT_SECRET || "supremeSecretKey",
       { expiresIn: "7d" }
     );
 
-    res.status(200).json({
-      message: "Client admin login successful",
-      token,
-      clientAdmin: {
-        id: admin._id,
-        name: admin.name,
-        email: admin.email,
-        contactNo: admin.contactNo,
-        organizationName: admin.organizationName,
-      },
-    });
+    res.status(200).json({ message: "Login successful", token, admin });
   } catch (err) {
-    console.error("Login client admin error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: err.message });
   }
 };
-
 
 /* ===========================
    CLIENT USER LOGIN
@@ -113,3 +89,98 @@ export const clientSetPaymentPlan = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+
+export const getAllEmployeeReportsForClient = async (req, res) => {
+  try {
+    const { role, id: userId } = req.user;
+
+    if (!["client_admin", "client_user"].includes(role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    /* ======================================================
+       1️ GET ORGANIZATION NAME
+    ====================================================== */
+
+    let orgName;
+
+    if (role === "client_admin") {
+      const admin = await ClientAdmin.findById(userId);
+      if (!admin) return res.status(404).json({ message: "Client Admin not found" });
+      orgName = admin.organizationName;
+    }
+
+    if (role === "client_user") {
+      const user = await ClientUser.findById(userId).populate("parentClientAdmin");
+      if (!user) return res.status(404).json({ message: "Client User not found" });
+      orgName = user.parentClientAdmin?.organizationName;
+      if (!orgName) return res.status(404).json({ message: "Organization not found" });
+    }
+
+    /* ======================================================
+       2️ GET ALL CAMPAIGN IDs FOR THIS ORGANIZATION
+    ====================================================== */
+
+    const campaigns = await Campaign.find({ client: orgName }).select("_id");
+    const campaignIds = campaigns.map((c) => c._id);
+
+    if (!campaignIds.length) {
+      return res.status(200).json({
+        message: "No campaigns found for this organization",
+        totalReports: 0,
+        reports: []
+      });
+    }
+
+    /* ======================================================
+       3️ APPLY OPTIONAL FILTERS
+    ====================================================== */
+
+    const { employeeId, retailerId, campaignId, fromDate, toDate } = req.query;
+
+    let filter = {
+      campaignId: { $in: campaignIds }
+    };
+
+    if (employeeId) filter.employeeId = employeeId;
+    if (retailerId) filter.retailerId = retailerId;
+
+    // Allow specific campaign filter only if it belongs to organization
+    if (campaignId && campaignIds.includes(campaignId)) {
+      filter.campaignId = campaignId;
+    }
+
+    if (fromDate || toDate) {
+      filter.createdAt = {};
+      if (fromDate) filter.createdAt.$gte = new Date(fromDate);
+      if (toDate) filter.createdAt.$lte = new Date(toDate);
+    }
+
+    /* ======================================================
+       4️FETCH REPORTS
+    ====================================================== */
+
+    const reports = await EmployeeReport.find(filter)
+      .populate("employeeId", "name email phone employeeId")
+      .populate("campaignId", "name type client")
+      .populate("retailerId", "name contactNo shopDetails")
+      .populate("visitScheduleId", "visitDate status visitType")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      message: "Client reports fetched successfully",
+      totalReports: reports.length,
+      reports
+    });
+
+  } catch (err) {
+    console.error("Client report fetch error:", err);
+    return res.status(500).json({
+      message: "Server error",
+      error: err.message
+    });
+  }
+};
+
