@@ -49,7 +49,9 @@ changeEmployeeStatus,
     deleteVisitSchedule,
     createAdminReport,
     updateEmployeeReport,
-    deleteEmployeeReport
+    deleteEmployeeReport,
+    adminGetRetailerReportsInCampaign,
+  adminGetReportsByRetailer
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -190,5 +192,21 @@ router.delete(
 );
 
 router.delete("/reports/:reportId", protect, deleteEmployeeReport);
+// ===============================
+// ADMIN REPORT ROUTES
+// ===============================
 
+// 1️⃣ All retailer reports in a selected campaign
+router.get(
+  "/reports/campaign-retailers",
+  protect,
+  adminGetRetailerReportsInCampaign
+);
+
+// 2️⃣ All reports submitted by one retailer
+router.get(
+  "/reports/retailer/:retailerId",
+  protect,
+  adminGetReportsByRetailer
+);
 export default router;
