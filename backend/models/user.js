@@ -374,11 +374,10 @@ const reportFileSchema = new mongoose.Schema({
 });
 const employeeReportSchema = new Schema(
   {
-    employeeId: { type: Types.ObjectId, ref: "Employee", required: true },
+    employeeId: { type: Types.ObjectId, ref: "Employee" }, // optional if retailer submits
     campaignId: { type: Types.ObjectId, ref: "Campaign", required: true },
     retailerId: { type: Types.ObjectId, ref: "Retailer", required: true },
 
-    // ⭐ NEW: link report → visit schedule
     visitScheduleId: { type: Types.ObjectId, ref: "VisitSchedule" },
 
     visitType: String,
@@ -417,6 +416,33 @@ const employeeReportSchema = new Schema(
       data: Buffer,
       contentType: String,
       fileName: String,
+    },
+
+    /* ==========================================
+       🔥 WHO SUBMITTED THIS REPORT (NEW)
+    ========================================== */
+    submittedByRole: {
+      type: String,
+      enum: ["Employee", "Admin", "Retailer"],
+      required: true,
+    },
+
+    submittedByEmployee: {
+      type: Types.ObjectId,
+      ref: "Employee",
+      default: null,
+    },
+
+    submittedByAdmin: {
+      type: Types.ObjectId,
+      ref: "Admin",
+      default: null,
+    },
+
+    submittedByRetailer: {
+      type: Types.ObjectId,
+      ref: "Retailer",
+      default: null,
     },
   },
   { timestamps: true }
