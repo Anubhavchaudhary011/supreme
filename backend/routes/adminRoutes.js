@@ -74,7 +74,16 @@ router.post("/client-admin-login", loginClientAdmin);
 
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
-router.post("/admin/reports", protect, createAdminReport);
+router.post(
+  "/admin/reports",
+  protect,
+  upload.fields([
+    { name: "images", maxCount: 10 },   // multiple images
+    { name: "billCopy", maxCount: 1 }   // single bill copy
+  ]),
+  createAdminReport
+);
+
 router.put("/reports/:reportId", protect, updateEmployeeReport);
 
 router.post("/employees", protect, addEmployee);
