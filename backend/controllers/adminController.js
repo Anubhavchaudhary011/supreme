@@ -2838,12 +2838,10 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       return res.status(400).json({ message: "campaignId is required" });
     }
 
-    // -------------------------
-    // Build filter
-    // -------------------------
-    const filter = {
-      campaignId,
-    };
+    // -------------------------------
+    // Build Filter
+    // -------------------------------
+    const filter = { campaignId };
 
     if (retailerId) filter.retailerId = retailerId;
 
@@ -2853,20 +2851,16 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       if (toDate) filter.createdAt.$lte = new Date(toDate);
     }
 
-    // -------------------------
-    // Fetch Reports
-    // -------------------------
+    // -------------------------------
+    // Fetch Reports (NO .lean())
+    // -------------------------------
     const reports = await EmployeeReport.find(filter)
       .populate("retailerId", "name uniqueId retailerCode contactNo shopDetails")
       .populate("employeeId", "name phone email position")
       .populate("campaignId", "name type client")
       .populate("visitScheduleId", "visitDate status visitType")
-      .sort({ createdAt: -1 })
-      .lean();
+      .sort({ createdAt: -1 });
 
-    // -------------------------
-    // If none found
-    // -------------------------
     if (!reports.length) {
       return res.status(200).json({
         message: "No retailer reports found for this campaign",
@@ -2875,38 +2869,62 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       });
     }
 
-    // -------------------------
-    // Flatten Response
-    // -------------------------
-    const finalReports = reports.map(r => ({
-      ...r,
+    // -------------------------------
+    // Convert Buffer → Base64
+    // -------------------------------
+    const convertImages = (imgs = []) =>
+      imgs.map(img => ({
+        fileName: img.fileName,
+        contentType: img.contentType,
+        base64: `data:${img.contentType};base64,${img.data.toString("base64")}`
+      }));
 
-      // Who Submitted
-      submittedByRole: r.submittedByRole,
-      
-      // Campaign
-      campaignName: r.campaignId?.name || "",
-      campaignType: r.campaignId?.type || "",
-      clientName: r.campaignId?.client || "",
+    const convertBillCopy = (bill) => {
+      if (!bill || !bill.data) return null;
+
+      return {
+        fileName: bill.fileName,
+        contentType: bill.contentType,
+        base64: `data:${bill.contentType};base64,${bill.data.toString("base64")}`
+      };
+    };
+
+    // -------------------------------
+    // Flatten Response
+    // -------------------------------
+    const finalReports = reports.map(r => ({
+      ...r._doc,
+
+      // Images
+      images: convertImages(r.images),
+      billCopy: convertBillCopy(r.billCopy),
+
+      // Who submitted
+      submittedByRole: r.submittedByRole || "",
+
+      // Employee
+      employeeName: r.employeeId?.name || "",
+      employeePhone: r.employeeId?.phone || "",
+      employeeEmail: r.employeeId?.email || "",
+      employeePosition: r.employeeId?.position || "",
 
       // Retailer
       retailerName: r.retailerId?.name || "",
       retailerUniqueId: r.retailerId?.uniqueId || "",
       retailerCode: r.retailerId?.retailerCode || "",
       retailerContact: r.retailerId?.contactNo || "",
-      
+
       shopName: r.retailerId?.shopDetails?.shopName || "",
       shopCity: r.retailerId?.shopDetails?.shopAddress?.city || "",
       shopState: r.retailerId?.shopDetails?.shopAddress?.state || "",
       shopPincode: r.retailerId?.shopDetails?.shopAddress?.pincode || "",
 
-      // Employee (if employee submitted)
-      employeeName: r.employeeId?.name || "",
-      employeePhone: r.employeeId?.phone || "",
-      employeeEmail: r.employeeId?.email || "",
-      employeePosition: r.employeeId?.position || "",
+      // Campaign
+      campaignName: r.campaignId?.name || "",
+      campaignType: r.campaignId?.type || "",
+      clientName: r.campaignId?.client || "",
 
-      // Visit schedule
+      // Visit
       visitDate: r.visitScheduleId?.visitDate || "",
       visitStatus: r.visitScheduleId?.status || "",
       visitType: r.visitScheduleId?.visitType || "",
@@ -2923,6 +2941,7 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 export const adminGetReportsByRetailer = async (req, res) => {
   try {
     const { role } = req.user;
