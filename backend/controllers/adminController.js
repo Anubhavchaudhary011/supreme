@@ -1326,11 +1326,42 @@ export const createAdminReport = async (req, res) => {
       });
     }
 
+    // ----------------------------------------------------
+    //  HANDLE FILES (Images & Bill Copy)
+    // ----------------------------------------------------
+    const files = req.files || {};
+
+    const images = [];
+
+    if (files.images && files.images.length > 0) {
+      files.images.forEach((file) => {
+        images.push({
+          data: file.buffer,
+          contentType: file.mimetype,
+          fileName: file.originalname,
+        });
+      });
+    }
+
+    let billCopy = null;
+    if (files.billCopy && files.billCopy[0]) {
+      const file = files.billCopy[0];
+      billCopy = {
+        data: file.buffer,
+        contentType: file.mimetype,
+        fileName: file.originalname,
+      };
+    }
+
+    // ----------------------------------------------------
+    //  CREATE REPORT
+    // ----------------------------------------------------
     const report = await EmployeeReport.create({
       employeeId,
       campaignId,
       retailerId,
       visitScheduleId,
+
       reportType,
       otherReasonText: notes,
 
@@ -1341,7 +1372,10 @@ export const createAdminReport = async (req, res) => {
       productType,
       quantity,
 
-      location,
+      location: location ? JSON.parse(location) : undefined,
+
+      images,
+      billCopy,
 
       submittedByRole: "Admin",
       submittedByAdmin: req.user.id
@@ -1357,6 +1391,7 @@ export const createAdminReport = async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 export const updateEmployeeReport = async (req, res) => {
   try {
     const { reportId } = req.params;
