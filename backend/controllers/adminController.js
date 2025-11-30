@@ -2838,9 +2838,9 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       return res.status(400).json({ message: "campaignId is required" });
     }
 
-    // -------------------------------
+    // -----------------------------------------------
     // Build Filter
-    // -------------------------------
+    // -----------------------------------------------
     const filter = { campaignId };
 
     if (retailerId) filter.retailerId = retailerId;
@@ -2851,9 +2851,9 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       if (toDate) filter.createdAt.$lte = new Date(toDate);
     }
 
-    // -------------------------------
-    // Fetch Reports (NO .lean())
-    // -------------------------------
+    // -----------------------------------------------
+    // Fetch Reports with Population
+    // -----------------------------------------------
     const reports = await EmployeeReport.find(filter)
       .populate("retailerId", "name uniqueId retailerCode contactNo shopDetails")
       .populate("employeeId", "name phone email position")
@@ -2869,13 +2869,13 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       });
     }
 
-    // -------------------------------
-    // Convert Buffer → Base64
-    // -------------------------------
+    // -----------------------------------------------
+    // Buffer → Base64 Helpers
+    // -----------------------------------------------
     const convertImages = (imgs = []) =>
       imgs.map(img => ({
-        fileName: img.fileName,
-        contentType: img.contentType,
+        fileName: img.fileName || "",
+        contentType: img.contentType || "image/jpeg",
         base64: `data:${img.contentType};base64,${img.data.toString("base64")}`
       }));
 
@@ -2883,32 +2883,29 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       if (!bill || !bill.data) return null;
 
       return {
-        fileName: bill.fileName,
-        contentType: bill.contentType,
+        fileName: bill.fileName || "",
+        contentType: bill.contentType || "application/pdf",
         base64: `data:${bill.contentType};base64,${bill.data.toString("base64")}`
       };
     };
 
-    // -------------------------------
-    // Flatten Response
-    // -------------------------------
+    // -----------------------------------------------
+    // Final Frontend-Aligned Response
+    // -----------------------------------------------
     const finalReports = reports.map(r => ({
       ...r._doc,
 
-      // Images
+      // Correct images & bill copy formats
       images: convertImages(r.images),
       billCopy: convertBillCopy(r.billCopy),
 
-      // Who submitted
-      submittedByRole: r.submittedByRole || "",
-
-      // Employee
+      // Employee info
       employeeName: r.employeeId?.name || "",
       employeePhone: r.employeeId?.phone || "",
       employeeEmail: r.employeeId?.email || "",
       employeePosition: r.employeeId?.position || "",
 
-      // Retailer
+      // Retailer info
       retailerName: r.retailerId?.name || "",
       retailerUniqueId: r.retailerId?.uniqueId || "",
       retailerCode: r.retailerId?.retailerCode || "",
@@ -2919,15 +2916,32 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       shopState: r.retailerId?.shopDetails?.shopAddress?.state || "",
       shopPincode: r.retailerId?.shopDetails?.shopAddress?.pincode || "",
 
-      // Campaign
+      // Campaign info
       campaignName: r.campaignId?.name || "",
       campaignType: r.campaignId?.type || "",
       clientName: r.campaignId?.client || "",
 
-      // Visit
+      // Visit details
       visitDate: r.visitScheduleId?.visitDate || "",
       visitStatus: r.visitScheduleId?.status || "",
       visitType: r.visitScheduleId?.visitType || "",
+
+      // Fields exactly matching your frontend
+      reportType: r.reportType || "",
+      frequency: r.frequency || "",
+      stockType: r.stockType || "",
+      productType: r.productType || "",
+      brand: r.brand || "",
+      product: r.product || "",
+      sku: r.sku || "",
+      quantity: r.quantity || "",
+      location: r.location || "",
+      attended: r.attended || "",
+      notVisitedReason: r.notVisitedReason || "",
+      otherReasonText: r.otherReasonText || "",
+      extraField: r.extraField || "", // frontend expects report.extraField
+
+      submittedByRole: r.submittedByRole || "",
     }));
 
     return res.status(200).json({
