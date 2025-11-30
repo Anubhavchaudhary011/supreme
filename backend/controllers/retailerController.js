@@ -492,3 +492,81 @@ export const getRetailerCampaignPayments = async (req, res) => {
     res.status(500).json({ message: "Error fetching retailer payments", error });
   }
 };
+export const submitRetailerReport = async (req, res) => {
+  try {
+    const retailerId = req.user.id; // retailer from JWT
+
+    const {
+      campaignId,
+      visitType,
+      reportType,
+      stockType,
+      brand,
+      product,
+      sku,
+      quantity,
+      latitude,
+      longitude,
+      otherReasonText
+    } = req.body;
+
+    if (!campaignId) {
+      return res.status(400).json({ message: "campaignId is required" });
+    }
+
+    // Retailer → Campaign validation
+    const campaign = await Campaign.findById(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found" });
+    }
+
+    const isAssigned = campaign.assignedRetailers.some(
+      r => r.retailerId.toString() === retailerId.toString()
+    );
+
+    if (!isAssigned) {
+      return res.status(403).json({ message: "Retailer not assigned to this campaign" });
+    }
+
+    // Create report
+    const report = new EmployeeReport({
+      employeeId: null,                // retailer report
+      retailerId,
+      campaignId,
+      visitType,
+      reportType,
+      stockType,
+      brand,
+      product,
+      sku,
+      quantity,
+      otherReasonText,
+      location: {
+        latitude: Number(latitude) || null,
+        longitude: Number(longitude) || null,
+      },
+
+      submittedByRole: "Retailer",
+      submittedByRetailer: retailerId
+    });
+
+    // Images upload
+    if (req.files?.images) {
+      report.images = req.files.images.map((file) => ({
+        data: file.buffer,
+        contentType: file.mimetype,
+        fileName: file.originalname,
+      }));
+    }
+
+    await report.save();
+
+    res.status(201).json({
+      message: "Retailer report submitted successfully",
+      report
+    });
+  } catch (error) {
+    console.error("Retailer submit report error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
