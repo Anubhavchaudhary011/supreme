@@ -2527,32 +2527,31 @@ export const downloadEmployeeRetailerMappingReport = async (req, res) => {
 ====================================================== */
 export const getAllEmployeeReports = async (req, res) => {
   try {
-    const { role, id: userId } = req.user;
-
-    const { 
-      employeeId,
-      campaignId, 
-      retailerId, 
-      fromDate, 
-      toDate 
-    } = req.query;
+    const { role } = req.user;
+    const { campaignId, employeeId, retailerId, fromDate, toDate } = req.query;
 
     // ----------------------------------------------------
-    // Build Filter
+    // Admin / Client Admin ONLY
     // ----------------------------------------------------
-    const filter = {};
-
-    // Employees can only view their own reports
-    if (role === "employee") {
-      filter.employeeId = userId;
+    if (!["admin", "client_admin", "client_user"].includes(role)) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
-    // Admin / Client Admin filters
+    // ----------------------------------------------------
+    // Campaign is REQUIRED
+    // ----------------------------------------------------
+    if (!campaignId) {
+      return res.status(400).json({ message: "campaignId is required" });
+    }
+
+    // ----------------------------------------------------
+    // Build filter
+    // ----------------------------------------------------
+    const filter = { campaignId };
+
     if (employeeId) filter.employeeId = employeeId;
-    if (campaignId) filter.campaignId = campaignId;
     if (retailerId) filter.retailerId = retailerId;
 
-    // Date filter
     if (fromDate || toDate) {
       filter.createdAt = {};
       if (fromDate) filter.createdAt.$gte = new Date(fromDate);
@@ -2560,7 +2559,7 @@ export const getAllEmployeeReports = async (req, res) => {
     }
 
     // ----------------------------------------------------
-    // Query Reports with POPULATE
+    // Fetch reports
     // ----------------------------------------------------
     const reports = await EmployeeReport.find(filter)
       .populate("employeeId", "name email phone position")
@@ -2575,50 +2574,43 @@ export const getAllEmployeeReports = async (req, res) => {
 
     if (!reports.length) {
       return res.status(200).json({
-        message: "No reports found",
+        message: "No reports found for this campaign",
         totalReports: 0,
         reports: []
       });
     }
 
     // ----------------------------------------------------
-    // FLATTEN RETAILER DETAILS (⭐ important for frontend)
+    // Flatten for frontend
     // ----------------------------------------------------
     const finalReports = reports.map(r => ({
       ...r,
 
-      // Employee
       employeeName: r.employeeId?.name || "",
       employeePhone: r.employeeId?.phone || "",
       employeeEmail: r.employeeId?.email || "",
+      employeePosition: r.employeeId?.position || "",
 
-      // Retailer
       retailerName: r.retailerId?.name || "",
       retailerUniqueId: r.retailerId?.uniqueId || "",
       retailerCode: r.retailerId?.retailerCode || "",
       retailerContact: r.retailerId?.contactNo || "",
       shopName: r.retailerId?.shopDetails?.shopName || "",
-
       shopCity: r.retailerId?.shopDetails?.shopAddress?.city || "",
       shopState: r.retailerId?.shopDetails?.shopAddress?.state || "",
       shopPincode: r.retailerId?.shopDetails?.shopAddress?.pincode || "",
 
-      // Campaign
       campaignName: r.campaignId?.name || "",
       campaignType: r.campaignId?.type || "",
       clientName: r.campaignId?.client || "",
 
-      // Visit Schedule
       visitDate: r.visitScheduleId?.visitDate || null,
       visitStatus: r.visitScheduleId?.status || "",
       visitType: r.visitScheduleId?.visitType || "",
     }));
 
-    // ----------------------------------------------------
-    // SUCCESS RESPONSE
-    // ----------------------------------------------------
-    res.status(200).json({
-      message: "Employee reports fetched successfully",
+    return res.status(200).json({
+      message: "Reports fetched successfully",
       totalReports: finalReports.length,
       reports: finalReports
     });
@@ -2641,9 +2633,18 @@ export const getReportsByEmployeeId = async (req, res) => {
     }
 
     const reports = await EmployeeReport.find({ employeeId })
-      .populate("campaignId", "name type")
-      .populate("retailerId", "name contactNo shopDetails")
-      .populate("employeeId", "name email phone position")
+      .populate("campaignId") // full campaign details
+      .populate("employeeId") // full employee details
+      .populate({
+        path: "retailerId",
+        populate: [
+          { path: "shopDetails.shopAddress" },
+          { path: "shopDetails.outletPhoto" },
+        ],
+      })
+      .populate("submittedByEmployee", "name email phone position")
+      .populate("submittedByAdmin", "name email phone")
+      .populate("submittedByRetailer", "name contactNo email uniqueId")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -2658,6 +2659,7 @@ export const getReportsByEmployeeId = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 export const updateVisitScheduleDetails = async (req, res) => {
   try {
     const { scheduleId } = req.params;
@@ -2785,5 +2787,185 @@ export const deleteEmployeeReport = async (req, res) => {
       message: "Server error",
       error: error.message
     });
+  }
+};
+export const adminGetRetailerReportsInCampaign = async (req, res) => {
+  try {
+    const { role } = req.user;
+
+    if (role !== "admin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const { campaignId, retailerId, fromDate, toDate } = req.query;
+
+    if (!campaignId) {
+      return res.status(400).json({ message: "campaignId is required" });
+    }
+
+    // -------------------------
+    // Build filter
+    // -------------------------
+    const filter = {
+      campaignId,
+    };
+
+    if (retailerId) filter.retailerId = retailerId;
+
+    if (fromDate || toDate) {
+      filter.createdAt = {};
+      if (fromDate) filter.createdAt.$gte = new Date(fromDate);
+      if (toDate) filter.createdAt.$lte = new Date(toDate);
+    }
+
+    // -------------------------
+    // Fetch Reports
+    // -------------------------
+    const reports = await EmployeeReport.find(filter)
+      .populate("retailerId", "name uniqueId retailerCode contactNo shopDetails")
+      .populate("employeeId", "name phone email position")
+      .populate("campaignId", "name type client")
+      .populate("visitScheduleId", "visitDate status visitType")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // -------------------------
+    // If none found
+    // -------------------------
+    if (!reports.length) {
+      return res.status(200).json({
+        message: "No retailer reports found for this campaign",
+        totalReports: 0,
+        reports: []
+      });
+    }
+
+    // -------------------------
+    // Flatten Response
+    // -------------------------
+    const finalReports = reports.map(r => ({
+      ...r,
+
+      // Who Submitted
+      submittedByRole: r.submittedByRole,
+      
+      // Campaign
+      campaignName: r.campaignId?.name || "",
+      campaignType: r.campaignId?.type || "",
+      clientName: r.campaignId?.client || "",
+
+      // Retailer
+      retailerName: r.retailerId?.name || "",
+      retailerUniqueId: r.retailerId?.uniqueId || "",
+      retailerCode: r.retailerId?.retailerCode || "",
+      retailerContact: r.retailerId?.contactNo || "",
+      
+      shopName: r.retailerId?.shopDetails?.shopName || "",
+      shopCity: r.retailerId?.shopDetails?.shopAddress?.city || "",
+      shopState: r.retailerId?.shopDetails?.shopAddress?.state || "",
+      shopPincode: r.retailerId?.shopDetails?.shopAddress?.pincode || "",
+
+      // Employee (if employee submitted)
+      employeeName: r.employeeId?.name || "",
+      employeePhone: r.employeeId?.phone || "",
+      employeeEmail: r.employeeId?.email || "",
+      employeePosition: r.employeeId?.position || "",
+
+      // Visit schedule
+      visitDate: r.visitScheduleId?.visitDate || "",
+      visitStatus: r.visitScheduleId?.status || "",
+      visitType: r.visitScheduleId?.visitType || "",
+    }));
+
+    return res.status(200).json({
+      message: "Retailer reports for campaign fetched successfully",
+      totalReports: finalReports.length,
+      reports: finalReports
+    });
+
+  } catch (err) {
+    console.error("Admin retailer campaign reports error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+export const adminGetReportsByRetailer = async (req, res) => {
+  try {
+    const { role } = req.user;
+
+    if (role !== "admin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const { retailerId } = req.params;
+    const { campaignId, fromDate, toDate } = req.query;
+
+    if (!retailerId) {
+      return res.status(400).json({ message: "retailerId is required" });
+    }
+
+    const filter = { retailerId };
+
+    if (campaignId) filter.campaignId = campaignId;
+
+    if (fromDate || toDate) {
+      filter.createdAt = {};
+      if (fromDate) filter.createdAt.$gte = new Date(fromDate);
+      if (toDate) filter.createdAt.$lte = new Date(toDate);
+    }
+
+    const reports = await EmployeeReport.find(filter)
+      .populate("campaignId", "name type client")
+      .populate("retailerId", "name uniqueId retailerCode contactNo shopDetails")
+      .populate("employeeId", "name email phone position")
+      .populate("visitScheduleId", "visitDate status visitType")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!reports.length) {
+      return res.status(200).json({
+        message: "No reports found for this retailer",
+        totalReports: 0,
+        reports: []
+      });
+    }
+
+    const finalReports = reports.map(r => ({
+      ...r,
+
+      submittedByRole: r.submittedByRole,
+
+      retailerName: r.retailerId?.name || "",
+      retailerCode: r.retailerId?.retailerCode || "",
+      retailerUniqueId: r.retailerId?.uniqueId || "",
+      retailerContact: r.retailerId?.contactNo || "",
+
+      shopName: r.retailerId?.shopDetails?.shopName || "",
+      shopCity: r.retailerId?.shopDetails?.shopAddress?.city || "",
+      shopState: r.retailerId?.shopDetails?.shopAddress?.state || "",
+      shopPincode: r.retailerId?.shopDetails?.shopAddress?.pincode || "",
+
+      campaignName: r.campaignId?.name || "",
+      campaignType: r.campaignId?.type || "",
+      clientName: r.campaignId?.client || "",
+
+      employeeName: r.employeeId?.name || "",
+      employeePhone: r.employeeId?.phone || "",
+      employeeEmail: r.employeeId?.email || "",
+      employeePosition: r.employeeId?.position || "",
+
+      visitDate: r.visitScheduleId?.visitDate || "",
+      visitStatus: r.visitScheduleId?.status || "",
+      visitType: r.visitScheduleId?.visitType || "",
+    }));
+
+    res.status(200).json({
+      message: "Retailer-specific reports fetched successfully",
+      totalReports: finalReports.length,
+      reports: finalReports
+    });
+
+  } catch (err) {
+    console.error("Admin retailer reports error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
