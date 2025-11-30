@@ -7,7 +7,8 @@ import {
   getRetailerProfile,
   getRetailerCampaigns,
   updateCampaignStatus,
-    updateRetailer
+    updateRetailer,
+    submitRetailerReport
 } from "../controllers/retailerController.js";
 import multer from "multer";
 import { protect } from "../middleware/authMiddleware.js"; // JWT middleware
@@ -51,6 +52,12 @@ router.patch(
     { name: "outletPhoto", maxCount: 1 }
   ]),
   updateRetailer
+);
+router.post(
+  "/retailer/report/submit",
+  protect, // Retailer auth
+  upload.fields([{ name: "images", maxCount: 10 }]),
+  submitRetailerReport
 );
 
 export default router;
