@@ -2730,10 +2730,16 @@ export const getReportsByEmployeeId = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    // ⭐ Add frequency to each report (no other changes)
+    const finalReports = reports.map(r => ({
+      ...r,
+      frequency: r.frequency || "",
+    }));
+
     res.status(200).json({
       message: "Reports fetched successfully",
-      totalReports: reports.length,
-      reports,
+      totalReports: finalReports.length,
+      reports: finalReports,
     });
 
   } catch (err) {
