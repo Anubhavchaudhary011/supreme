@@ -51,7 +51,9 @@ changeEmployeeStatus,
     updateEmployeeReport,
     deleteEmployeeReport,
     adminGetRetailerReportsInCampaign,
-  adminGetReportsByRetailer
+  adminGetReportsByRetailer,
+  adminSetPaymentPlan,
+  adminUpdatePaymentPlan
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -83,8 +85,16 @@ router.post(
   ]),
   createAdminReport
 );
-
-router.put("/reports/:reportId", protect, updateEmployeeReport);
+router.post("/campaigns/payment", protect, updateCampaignPayment);
+router.put(
+  "/reports/:reportId",
+  protect,
+  upload.fields([
+    { name: "images", maxCount: 20 },
+    { name: "billCopy", maxCount: 1 }
+  ]),
+  updateEmployeeReport
+);
 
 router.post("/employees", protect, addEmployee);
 router.post(
@@ -218,4 +228,7 @@ router.get(
   protect,
   adminGetReportsByRetailer
 );
+router.post("/payments/set-plan", protect, adminSetPaymentPlan);
+router.put("/payments/update", protect, adminUpdatePaymentPlan);
+
 export default router;
