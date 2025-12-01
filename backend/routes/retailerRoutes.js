@@ -8,7 +8,10 @@ import {
   getRetailerCampaigns,
   updateCampaignStatus,
     updateRetailer,
-    submitRetailerReport
+    submitRetailerReport,
+    getRetailerReports,
+     viewBillCopy,
+       viewReportImage
 } from "../controllers/retailerController.js";
 import multer from "multer";
 import { protect } from "../middleware/authMiddleware.js"; // JWT middleware
@@ -58,6 +61,18 @@ router.post(
   protect, // Retailer auth
   upload.fields([{ name: "images", maxCount: 10 }]),
   submitRetailerReport
+);
+router.get("/retailer/reports", protect, getRetailerReports);
+router.get(
+  "/reports/:reportId/images/:imageIndex",
+  protect,
+  viewReportImage
+);
+
+router.get(
+  "/reports/:reportId/bill",
+  protect,
+  viewBillCopy
 );
 
 export default router;
