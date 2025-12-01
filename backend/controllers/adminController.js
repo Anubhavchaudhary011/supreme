@@ -1327,30 +1327,32 @@ export const createAdminReport = async (req, res) => {
     }
 
     // ----------------------------------------------------
-    //  HANDLE FILES (Images & Bill Copy)
+    //  HANDLE FILES (Images & Multiple Bill Copies)
     // ----------------------------------------------------
     const files = req.files || {};
 
+    // 📸 IMAGES ARRAY
     const images = [];
-
     if (files.images && files.images.length > 0) {
       files.images.forEach((file) => {
         images.push({
           data: file.buffer,
           contentType: file.mimetype,
-          fileName: file.originalname,
+          fileName: file.originalname
         });
       });
     }
 
-    let billCopy = null;
-    if (files.billCopy && files.billCopy[0]) {
-      const file = files.billCopy[0];
-      billCopy = {
-        data: file.buffer,
-        contentType: file.mimetype,
-        fileName: file.originalname,
-      };
+    // 📄 MULTIPLE BILL COPIES ARRAY
+    const billCopies = [];
+    if (files.billCopy && files.billCopy.length > 0) {
+      files.billCopy.forEach((file) => {
+        billCopies.push({
+          data: file.buffer,
+          contentType: file.mimetype,
+          fileName: file.originalname
+        });
+      });
     }
 
     // ----------------------------------------------------
@@ -1375,7 +1377,7 @@ export const createAdminReport = async (req, res) => {
       location: location ? JSON.parse(location) : undefined,
 
       images,
-      billCopy,
+      billCopies,  // ⬅️ MULTIPLE BILLS SAVED HERE
 
       submittedByRole: "Admin",
       submittedByAdmin: req.user.id
@@ -1457,15 +1459,37 @@ export const updateEmployeeReport = async (req, res) => {
       report.images = [...(report.images || []), ...newImages];
     }
 
-    // --- Update bill copy if uploaded ---
+    /* ---------------------------------------------------------
+       🔥 MULTIPLE BILL COPIES SUPPORT (ONLY THIS PART ADDED)
+    --------------------------------------------------------- */
+
+    // Ensure billCopies array exists
+    if (!Array.isArray(report.billCopies)) {
+      report.billCopies = [];
+    }
+
+    // Add NEW bill copy files
     if (req.files?.billCopy?.length > 0) {
-      const file = req.files.billCopy[0];
-      report.billCopy = {
+      const newBills = req.files.billCopy.map(file => ({
         data: file.buffer,
         contentType: file.mimetype,
         fileName: file.originalname
-      };
+      }));
+
+      report.billCopies = [...report.billCopies, ...newBills];
     }
+
+    // Optional: remove bill copies by index
+    if (body.removedBillIndices) {
+      try {
+        const removeList = JSON.parse(body.removedBillIndices);
+        report.billCopies = report.billCopies.filter((_, i) => !removeList.includes(i));
+      } catch {
+        console.log("Invalid removedBillIndices");
+      }
+    }
+
+    /* ------------------------------------------------------- */
 
     await report.save();
 
