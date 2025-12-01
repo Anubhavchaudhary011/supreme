@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ClientAdmin, ClientUser, Campaign, Payment ,EmployeeReport } from "../models/user.js";
-import mongoose from "mongoose";
+
 /* ===========================
    CLIENT ADMIN LOGIN
 =========================== */
@@ -265,41 +265,29 @@ export const getClientCampaignPayments = async (req, res) => {
     }
 
     /* ----------------------------------------------------------
-       1️⃣ FETCH CLIENT ORGANIZATION + STATES
+       1️⃣ Get Client Organization Name
     ---------------------------------------------------------- */
     let organizationName;
-    let allowedStates = [];
 
     if (role === "client_admin") {
       const admin = await ClientAdmin.findById(userId);
-
       if (!admin) return res.status(404).json({ message: "Client Admin not found" });
 
       organizationName = admin.organizationName;
-      allowedStates = admin.states || [];
     }
 
     if (role === "client_user") {
       const user = await ClientUser.findById(userId).populate("parentClientAdmin");
-
-      if (!user || !user.parentClientAdmin) {
+      if (!user || !user.parentClientAdmin)
         return res.status(404).json({ message: "Parent Client Admin not found" });
-      }
 
       organizationName = user.parentClientAdmin.organizationName;
-      allowedStates = user.parentClientAdmin.states || [];
     }
 
     /* ----------------------------------------------------------
-       2️⃣ FETCH CAMPAIGNS FOR THIS CLIENT + STATE FILTER
+       2️⃣ Fetch ALL campaigns under this organization
     ---------------------------------------------------------- */
-    const campaignFilter = { client: organizationName };
-
-    if (allowedStates.length > 0) {
-      campaignFilter.states = { $in: allowedStates };
-    }
-
-    const campaigns = await Campaign.find(campaignFilter).lean();
+    const campaigns = await Campaign.find({ client: organizationName }).lean();
 
     if (!campaigns.length) {
       return res.status(200).json({
@@ -309,114 +297,77 @@ export const getClientCampaignPayments = async (req, res) => {
       });
     }
 
-    const campaignIds = campaigns.map(c => c._id);
+    const campaignIds = campaigns.map((c) => c._id);
 
     /* ----------------------------------------------------------
-       3️⃣ FETCH PAYMENTS (EXCLUDE totalAmount = 0)
+       3️⃣ Fetch ALL payments for these campaigns (NO FILTERS)
     ---------------------------------------------------------- */
     const payments = await Payment.find({
-      campaign: { $in: campaignIds },
-      totalAmount: { $gt: 0 }   // 🚀 EXCLUDE zero-amount payments
+      campaign: { $in: campaignIds }
     })
       .populate("retailer", "name contactNo shopDetails")
       .populate("campaign", "name type states")
+      .sort({ createdAt: -1 })
       .lean();
 
     /* ----------------------------------------------------------
-       4️⃣ PREPARE COUNTS FOR EACH CAMPAIGN
+       4️⃣ Prepare extra counts (optional but kept)
     ---------------------------------------------------------- */
     const outletCountByCampaign = {};
     const acceptedOutletsByCampaign = {};
     const employeeCountByCampaign = {};
 
-    campaigns.forEach(c => {
+    campaigns.forEach((c) => {
       outletCountByCampaign[c._id] = c.assignedRetailers?.length || 0;
-
       acceptedOutletsByCampaign[c._id] =
-        c.assignedRetailers?.filter(r => r.status === "accepted").length || 0;
-
+        c.assignedRetailers?.filter((r) => r.status === "accepted").length || 0;
       employeeCountByCampaign[c._id] = c.assignedEmployees?.length || 0;
     });
 
     /* ----------------------------------------------------------
-       5️⃣ GET UNIQUE OUTLETS WITH REPORTS FOR EACH CAMPAIGN
+       5️⃣ Format final output
     ---------------------------------------------------------- */
-    const reports = await EmployeeReport.aggregate([
-      {
-        $match: { campaignId: { $in: campaignIds } }
-      },
-      {
-        $group: {
-          _id: { campaignId: "$campaignId", retailerId: "$retailerId" }
-        }
-      }
-    ]);
+    const formatted = payments.map((p) => ({
+      paymentId: p._id,
 
-    const reportedOutletsByCampaign = {};
+      campaignId: p.campaign?._id,
+      campaignName: p.campaign?.name,
+      campaignType: p.campaign?.type,
 
-    reports.forEach(r => {
-      const campaignId = r._id.campaignId.toString();
+      retailerId: p.retailer?._id,
+      retailerName: p.retailer?.name,
+      retailerContact: p.retailer?.contactNo,
+      retailerCity: p.retailer?.shopDetails?.shopAddress?.city,
+      retailerState: p.retailer?.shopDetails?.shopAddress?.state,
 
-      if (!reportedOutletsByCampaign[campaignId]) {
-        reportedOutletsByCampaign[campaignId] = new Set();
-      }
+      totalOutletsAssigned: outletCountByCampaign[p.campaign?._id] || 0,
+      totalOutletsAccepted: acceptedOutletsByCampaign[p.campaign?._id] || 0,
+      totalEmployeesAssigned: employeeCountByCampaign[p.campaign?._id] || 0,
 
-      reportedOutletsByCampaign[campaignId].add(
-        r._id.retailerId.toString()
-      );
-    });
+      totalAmount: p.totalAmount,
+      amountPaid: p.amountPaid,
+      remainingAmount: p.remainingAmount,
+      paymentStatus: p.paymentStatus,
+      utrNumbers: p.utrNumbers,
+
+      lastUpdated: p.updatedAt,
+    }));
 
     /* ----------------------------------------------------------
-       6️⃣ FORMAT FINAL RESPONSE
+       6️⃣ Return response
     ---------------------------------------------------------- */
-    const formatted = payments.map(p => {
-      const cid = p.campaign?._id?.toString();
-
-      return {
-        paymentId: p._id,
-
-        /* Campaign Info */
-        campaignId: cid,
-        campaignName: p.campaign?.name,
-        campaignType: p.campaign?.type,
-        campaignStates: p.campaign?.states,
-
-        totalOutletsAssigned: outletCountByCampaign[cid] || 0,
-        totalOutletsAccepted: acceptedOutletsByCampaign[cid] || 0,
-        totalEmployeesAssigned: employeeCountByCampaign[cid] || 0,
-
-        totalOutletsReported:
-          reportedOutletsByCampaign[cid]
-            ? reportedOutletsByCampaign[cid].size
-            : 0,
-
-        /* Retailer Info */
-        retailerId: p.retailer?._id,
-        retailerName: p.retailer?.name,
-        retailerContact: p.retailer?.contactNo,
-        retailerCity: p.retailer?.shopDetails?.shopAddress?.city,
-        retailerState: p.retailer?.shopDetails?.shopAddress?.state,
-
-        /* Payment Info */
-        totalAmount: p.totalAmount,
-        amountPaid: p.amountPaid,
-        remainingAmount: p.remainingAmount,
-        paymentStatus: p.paymentStatus,
-        utrNumbers: p.utrNumbers,
-
-        lastUpdated: p.updatedAt,
-      };
-    });
-
     return res.status(200).json({
-      message: "Client campaign payments fetched successfully",
+      message: "Client payments fetched successfully",
       totalPayments: formatted.length,
-      payments: formatted
+      payments: formatted,
     });
 
   } catch (err) {
     console.error("Client payment fetch error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    return res.status(500).json({
+      message: "Server error",
+      error: err.message,
+    });
   }
 };
 
