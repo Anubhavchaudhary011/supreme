@@ -1317,7 +1317,8 @@ export const createAdminReport = async (req, res) => {
       sku,
       productType,
       quantity,
-      location
+      location,
+      frequency        // ⭐ ADDED HERE
     } = req.body;
 
     if (!employeeId || !campaignId || !retailerId) {
@@ -1326,14 +1327,10 @@ export const createAdminReport = async (req, res) => {
       });
     }
 
-    // ----------------------------------------------------
-    //  HANDLE FILES (Images & Multiple Bill Copies)
-    // ----------------------------------------------------
     const files = req.files || {};
 
-    // 📸 IMAGES ARRAY
     const images = [];
-    if (files.images && files.images.length > 0) {
+    if (files.images?.length > 0) {
       files.images.forEach((file) => {
         images.push({
           data: file.buffer,
@@ -1343,9 +1340,8 @@ export const createAdminReport = async (req, res) => {
       });
     }
 
-    // 📄 MULTIPLE BILL COPIES ARRAY
     const billCopies = [];
-    if (files.billCopy && files.billCopy.length > 0) {
+    if (files.billCopy?.length > 0) {
       files.billCopy.forEach((file) => {
         billCopies.push({
           data: file.buffer,
@@ -1366,6 +1362,7 @@ export const createAdminReport = async (req, res) => {
 
       reportType,
       otherReasonText: notes,
+      frequency,        // ⭐ ADDED HERE
 
       stockType,
       brand,
@@ -1377,7 +1374,7 @@ export const createAdminReport = async (req, res) => {
       location: location ? JSON.parse(location) : undefined,
 
       images,
-      billCopies,  // ⬅️ MULTIPLE BILLS SAVED HERE
+      billCopies,
 
       submittedByRole: "Admin",
       submittedByAdmin: req.user.id
