@@ -2,7 +2,6 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ClientAdmin, ClientUser, Campaign, Payment ,EmployeeReport } from "../models/user.js";
 import mongoose from "mongoose";
-
 /* ===========================
    CLIENT ADMIN LOGIN
 =========================== */
@@ -279,14 +278,16 @@ export const getClientCampaignPayments = async (req, res) => {
 
     if (role === "client_user") {
       const user = await ClientUser.findById(userId).populate("parentClientAdmin");
-      if (!user || !user.parentClientAdmin)
+
+      if (!user || !user.parentClientAdmin) {
         return res.status(404).json({ message: "Parent Client Admin not found" });
+      }
 
       organizationName = user.parentClientAdmin.organizationName;
     }
 
     /* ----------------------------------------------------------
-       2️⃣ Fetch ALL campaigns under this organization
+       2️⃣ Fetch ALL Campaigns Under This Organization
     ---------------------------------------------------------- */
     const campaigns = await Campaign.find({ client: organizationName }).lean();
 
@@ -301,7 +302,7 @@ export const getClientCampaignPayments = async (req, res) => {
     const campaignIds = campaigns.map((c) => c._id);
 
     /* ----------------------------------------------------------
-       3️⃣ Fetch ALL payments for these campaigns (NO FILTERS)
+       3️⃣ Fetch ALL Payments (NO FILTERS)
     ---------------------------------------------------------- */
     const payments = await Payment.find({
       campaign: { $in: campaignIds }
@@ -312,7 +313,7 @@ export const getClientCampaignPayments = async (req, res) => {
       .lean();
 
     /* ----------------------------------------------------------
-       4️⃣ Prepare extra counts (optional but kept)
+       4️⃣ Prepare Counts (Optional)
     ---------------------------------------------------------- */
     const outletCountByCampaign = {};
     const acceptedOutletsByCampaign = {};
@@ -320,31 +321,38 @@ export const getClientCampaignPayments = async (req, res) => {
 
     campaigns.forEach((c) => {
       outletCountByCampaign[c._id] = c.assignedRetailers?.length || 0;
+
       acceptedOutletsByCampaign[c._id] =
         c.assignedRetailers?.filter((r) => r.status === "accepted").length || 0;
+
       employeeCountByCampaign[c._id] = c.assignedEmployees?.length || 0;
     });
 
     /* ----------------------------------------------------------
-       5️⃣ Format final output
+       5️⃣ Format Final Output (Added shopName)
     ---------------------------------------------------------- */
     const formatted = payments.map((p) => ({
       paymentId: p._id,
 
+      /* Campaign Info */
       campaignId: p.campaign?._id,
       campaignName: p.campaign?.name,
       campaignType: p.campaign?.type,
 
+      /* Retailer Info */
       retailerId: p.retailer?._id,
       retailerName: p.retailer?.name,
+      retailerShopName: p.retailer?.shopDetails?.shopName || "",   // ⭐ ADDED
       retailerContact: p.retailer?.contactNo,
       retailerCity: p.retailer?.shopDetails?.shopAddress?.city,
       retailerState: p.retailer?.shopDetails?.shopAddress?.state,
 
+      /* Campaign Counts */
       totalOutletsAssigned: outletCountByCampaign[p.campaign?._id] || 0,
       totalOutletsAccepted: acceptedOutletsByCampaign[p.campaign?._id] || 0,
       totalEmployeesAssigned: employeeCountByCampaign[p.campaign?._id] || 0,
 
+      /* Payment Info */
       totalAmount: p.totalAmount,
       amountPaid: p.amountPaid,
       remainingAmount: p.remainingAmount,
@@ -355,19 +363,19 @@ export const getClientCampaignPayments = async (req, res) => {
     }));
 
     /* ----------------------------------------------------------
-       6️⃣ Return response
+       6️⃣ Send Response
     ---------------------------------------------------------- */
     return res.status(200).json({
       message: "Client payments fetched successfully",
       totalPayments: formatted.length,
-      payments: formatted,
+      payments: formatted
     });
 
   } catch (err) {
     console.error("Client payment fetch error:", err);
     return res.status(500).json({
       message: "Server error",
-      error: err.message,
+      error: err.message
     });
   }
 };
