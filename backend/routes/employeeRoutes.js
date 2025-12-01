@@ -4,7 +4,7 @@ import {
   getEmployeeCampaigns,
   updateCampaignStatus,
   updateEmployeeProfile,
-  clientSetPaymentPlan,
+  
    submitEmployeeReport,
    getEmployeeReports,
      downloadEmployeeReport,
