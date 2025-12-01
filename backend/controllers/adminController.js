@@ -1401,7 +1401,7 @@ export const updateEmployeeReport = async (req, res) => {
       return res.status(404).json({ message: "Report not found" });
     }
 
-    // Only admin or the employee who submitted it can update
+    // Permission: admin OR employee who submitted it
     const isAdmin = req.user.role === "admin";
     const isOwner = req.user.id === report.submittedByEmployee?.toString();
 
@@ -1411,7 +1411,7 @@ export const updateEmployeeReport = async (req, res) => {
       });
     }
 
-    // Update allowed fields
+    // Allowed fields to update
     const fields = [
       "visitType", "attended", "notVisitedReason", "otherReasonText",
       "reportType", "frequency", "fromDate", "toDate", "extraField",
@@ -1419,12 +1419,27 @@ export const updateEmployeeReport = async (req, res) => {
       "location"
     ];
 
-    fields.forEach(f => {
-      if (req.body[f] !== undefined) report[f] = req.body[f];
+    fields.forEach(field => {
+      if (req.body[field] !== undefined) {
+
+        // Fix: location must be parsed if sent as string
+        if (field === "location") {
+          try {
+            report.location =
+              typeof req.body.location === "string"
+                ? JSON.parse(req.body.location)
+                : req.body.location;
+          } catch (err) {
+            console.error("Invalid location JSON");
+          }
+        } else {
+          report[field] = req.body[field];
+        }
+      }
     });
 
-    // Image update (optional)
-    if (req.files?.images) {
+    // Update images ONLY if files uploaded
+    if (req.files?.images?.length > 0) {
       report.images = req.files.images.map(img => ({
         data: img.buffer,
         contentType: img.mimetype,
@@ -1432,7 +1447,8 @@ export const updateEmployeeReport = async (req, res) => {
       }));
     }
 
-    if (req.files?.billCopy) {
+    // Update bill copy ONLY if uploaded
+    if (req.files?.billCopy?.length > 0) {
       const file = req.files.billCopy[0];
       report.billCopy = {
         data: file.buffer,
@@ -1450,7 +1466,10 @@ export const updateEmployeeReport = async (req, res) => {
 
   } catch (error) {
     console.error("Update report error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
   }
 };
 
@@ -3035,5 +3054,155 @@ export const adminGetReportsByRetailer = async (req, res) => {
   } catch (err) {
     console.error("Admin retailer reports error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+export const adminSetPaymentPlan = async (req, res) => {
+  try {
+    const { campaignId, retailerId, totalAmount, notes } = req.body;
+
+    // 🔐 Only ADMIN allowed
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can set payment plans" });
+    }
+
+    // 1️⃣ Validate Campaign
+    const campaign = await Campaign.findById(campaignId);
+    if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+
+    // 2️⃣ Check retailer is assigned to this campaign
+    const isAssigned = campaign.assignedRetailers.some(
+      (r) => r.retailerId.toString() === retailerId.toString()
+    );
+
+    if (!isAssigned) {
+      return res
+        .status(400)
+        .json({ message: "Retailer is not assigned to this campaign" });
+    }
+
+    // 3️⃣ Avoid duplicate payment plan creation
+    const existing = await Payment.findOne({
+      campaign: campaignId,
+      retailer: retailerId,
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        message: "Payment plan already exists for this retailer in this campaign",
+        payment: existing,
+      });
+    }
+
+    // 4️⃣ Create new payment plan
+    const payment = await Payment.create({
+      retailer: retailerId,
+      campaign: campaignId,
+      totalAmount,
+      amountPaid: 0,
+      remainingAmount: totalAmount,
+      paymentStatus: "Pending",
+      notes,
+      lastUpdatedByAdmin: req.user._id,
+    });
+
+    return res.status(201).json({
+      message: "Payment plan created successfully by admin",
+      payment,
+    });
+
+  } catch (error) {
+    console.error("Admin Set Payment Error:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+export const adminUpdatePaymentPlan = async (req, res) => {
+  try {
+    const { campaignId, retailerId, amountPaid, utrNumber } = req.body;
+
+    // 🔐 Only admin can access this
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can update payments" });
+    }
+
+    // 1️⃣ Validate Campaign
+    const campaign = await Campaign.findById(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found" });
+    }
+
+    // 2️⃣ Check retailer is part of campaign & accepted
+    const assigned = campaign.assignedRetailers.find(
+      (r) => r.retailerId.toString() === retailerId.toString()
+    );
+
+    if (!assigned || assigned.status !== "accepted") {
+      return res.status(400).json({
+        message: "Retailer has not accepted this campaign yet or is not assigned",
+      });
+    }
+
+    // 3️⃣ Fetch payment plan
+    const payment = await Payment.findOne({
+      campaign: campaignId,
+      retailer: retailerId,
+    });
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment plan not found" });
+    }
+
+    // 4️⃣ Apply updates
+    let updated = false;
+
+    // Add amount
+    if (amountPaid !== undefined) {
+      payment.amountPaid += amountPaid;
+      updated = true;
+    }
+
+    // Add UTR entry
+    if (utrNumber) {
+      payment.utrNumbers.push({
+        utrNumber,
+        amount: amountPaid || 0,
+        date: new Date(),
+        updatedBy: req.user._id,
+      });
+      updated = true;
+    }
+
+    // Update balances
+    payment.remainingAmount = payment.totalAmount - payment.amountPaid;
+
+    // Prevent negative balance
+    if (payment.remainingAmount < 0) {
+      return res
+        .status(400)
+        .json({ message: "Paid amount exceeds total amount!" });
+    }
+
+    // Update payment status
+    if (payment.amountPaid === 0) {
+      payment.paymentStatus = "Pending";
+    } else if (payment.amountPaid < payment.totalAmount) {
+      payment.paymentStatus = "Partially Paid";
+    } else {
+      payment.paymentStatus = "Completed";
+    }
+
+    // Save updater admin
+    payment.lastUpdatedByAdmin = req.user._id;
+
+    // Save
+    if (updated) await payment.save();
+
+    res.status(200).json({
+      message: "Payment updated successfully by admin",
+      payment,
+    });
+
+  } catch (error) {
+    console.error("Admin payment update error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
