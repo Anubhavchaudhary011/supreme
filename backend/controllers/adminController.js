@@ -1411,32 +1411,19 @@ export const updateEmployeeReport = async (req, res) => {
       });
     }
 
-    // Allowed fields to update (visitType REMOVED)
+    // Allowed fields to update
     const fields = [
-      "attended", 
-      "notVisitedReason", 
-      "otherReasonText",
-      "reportType", 
-      "frequency", 
-      "fromDate", 
-      "toDate", 
-      "extraField",
-      "stockType", 
-      "brand", 
-      "product", 
-      "sku", 
-      "productType", 
-      "quantity",
+      "visitType", "attended", "notVisitedReason", "otherReasonText",
+      "reportType", "frequency", "fromDate", "toDate", "extraField",
+      "stockType", "brand", "product", "sku", "productType", "quantity",
       "location"
     ];
 
-    // Ensure req.body exists
-    if (!req.body) req.body = {};
-
     fields.forEach(field => {
-      if (req.body[field] !== undefined) {
-
-        // Parse location JSON when needed
+      // ✅ FIX: Allow empty strings (to clear fields) and check if key exists
+      if (req.body.hasOwnProperty(field)) {
+        
+        // Fix: location must be parsed if sent as string
         if (field === "location") {
           try {
             report.location =
@@ -1447,18 +1434,34 @@ export const updateEmployeeReport = async (req, res) => {
             console.error("Invalid location JSON");
           }
         } else {
+          // ✅ Allow empty strings to clear the field
           report[field] = req.body[field];
         }
       }
     });
 
-    // Update images ONLY if files uploaded
+    // ✅ Handle image removal
+    if (req.body.removedImageIndices) {
+      try {
+        const indicesToRemove = JSON.parse(req.body.removedImageIndices);
+        if (Array.isArray(indicesToRemove) && report.images) {
+          report.images = report.images.filter((_, idx) => !indicesToRemove.includes(idx));
+        }
+      } catch (err) {
+        console.error("Error parsing removedImageIndices:", err);
+      }
+    }
+
+    // ✅ Add new images (append to existing)
     if (req.files?.images?.length > 0) {
-      report.images = req.files.images.map(img => ({
+      const newImages = req.files.images.map(img => ({
         data: img.buffer,
         contentType: img.mimetype,
         fileName: img.originalname
       }));
+      
+      // Append to existing images
+      report.images = [...(report.images || []), ...newImages];
     }
 
     // Update bill copy ONLY if uploaded
@@ -1473,7 +1476,7 @@ export const updateEmployeeReport = async (req, res) => {
 
     await report.save();
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Report updated successfully",
       report
     });
