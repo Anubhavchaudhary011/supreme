@@ -4,12 +4,13 @@ import {
   getEmployeeCampaigns,
   updateCampaignStatus,
   updateEmployeeProfile,
-  
+  clientSetPaymentPlan,
    submitEmployeeReport,
    getEmployeeReports,
-    getEmployeeVisitProgress,
-    
-   getEmployeeProfile
+     downloadEmployeeReport,
+     getEmployeeVisitProgress,
+     downloadEmployeeReportsExcel,
+    getEmployeeProfile
 } from "../controllers/employeeController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { upload } from "../middleware/upload.js"; 
@@ -48,7 +49,7 @@ router.get("/employee/campaigns", protect, getEmployeeCampaigns);
 router.put("/employee/campaigns/:campaignId/status", protect, updateCampaignStatus);
 
 // 🔹 Client sets payment plan
-
+router.post("/client/campaigns/payment", protect, clientSetPaymentPlan);
 router.post(
   "/reports/submit",
   protect,
@@ -58,7 +59,6 @@ router.post(
   ]),
   submitEmployeeReport
 );
-router.get("/profile", protect, getEmployeeProfile);
 
 router.get("/reports", protect, getEmployeeReports);
 router.post(
@@ -73,5 +73,8 @@ router.get(
   protect,
   getEmployeeVisitProgress
 );
+
+router.get("/profile", protect, getEmployeeProfile);
+
 
 export default router;
