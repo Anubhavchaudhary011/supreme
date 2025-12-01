@@ -374,7 +374,7 @@ const reportFileSchema = new mongoose.Schema({
 });
 const employeeReportSchema = new Schema(
   {
-    employeeId: { type: Types.ObjectId, ref: "Employee" }, // optional if retailer submits
+    employeeId: { type: Types.ObjectId, ref: "Employee" },
     campaignId: { type: Types.ObjectId, ref: "Campaign", required: true },
     retailerId: { type: Types.ObjectId, ref: "Retailer", required: true },
 
@@ -398,12 +398,13 @@ const employeeReportSchema = new Schema(
     productType: String,
     quantity: Number,
 
-    // Geo Tag
+    // 📍 Geo Tag
     location: {
       latitude: Number,
       longitude: Number,
     },
 
+    // 📸 Multiple images
     images: [
       {
         data: Buffer,
@@ -412,15 +413,15 @@ const employeeReportSchema = new Schema(
       },
     ],
 
-    billCopy: {
-      data: Buffer,
-      contentType: String,
-      fileName: String,
-    },
+    // 📄 MULTIPLE BILL COPIES (UPDATED)
+    billCopies: [
+      {
+        data: Buffer,
+        contentType: String,
+        fileName: String,
+      }
+    ],
 
-    /* ==========================================
-       🔥 WHO SUBMITTED THIS REPORT (NEW)
-    ========================================== */
     submittedByRole: {
       type: String,
       enum: ["Employee", "Admin", "Retailer"],
