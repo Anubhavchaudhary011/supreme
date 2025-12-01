@@ -59,9 +59,13 @@ router.patch(
 router.post(
   "/retailer/report/submit",
   protect, // Retailer auth
-  upload.fields([{ name: "images", maxCount: 10 }]),
+  upload.fields([
+    { name: "images", maxCount: 10 },
+    { name: "billCopy", maxCount: 1 } // OPTIONAL if you also want bill copy
+  ]),
   submitRetailerReport
 );
+
 router.get("/retailer/reports", protect, getRetailerReports);
 router.get(
   "/reports/:reportId/images/:imageIndex",
