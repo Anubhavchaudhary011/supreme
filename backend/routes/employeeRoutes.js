@@ -9,7 +9,8 @@ import {
    getEmployeeReports,
      downloadEmployeeReport,
      getEmployeeVisitProgress,
-     downloadEmployeeReportsExcel
+     downloadEmployeeReportsExcel,
+   getEmployeeProfile
 } from "../controllers/employeeController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { upload } from "../middleware/upload.js"; 
@@ -58,6 +59,8 @@ router.post(
   ]),
   submitEmployeeReport
 );
+router.get("/profile", protect, getEmployeeProfile);
+
 router.get("/reports", protect, getEmployeeReports);
 router.post(
   "/report/download",
