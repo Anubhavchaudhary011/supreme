@@ -6,7 +6,8 @@ import {
   clientSetPaymentPlan,
   getAllEmployeeReportsForClient,
    getClientCampaigns,
-   getClientCampaignPayments
+   getClientCampaignPayments,
+    getClientReportedOutlets
 } from "../controllers/clientController.js";
 
 const router = express.Router();
@@ -24,5 +25,6 @@ router.get(
   getAllEmployeeReportsForClient
 );
 router.get("/client/payments", protect, getClientCampaignPayments);
+router.get("/client/reported-outlets", protect, getClientReportedOutlets);
 
 export default router;
