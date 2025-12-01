@@ -49,7 +49,7 @@ router.get("/employee/campaigns", protect, getEmployeeCampaigns);
 router.put("/employee/campaigns/:campaignId/status", protect, updateCampaignStatus);
 
 // 🔹 Client sets payment plan
-router.post("/client/campaigns/payment", protect, clientSetPaymentPlan);
+
 router.post(
   "/reports/submit",
   protect,
