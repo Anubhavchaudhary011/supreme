@@ -570,3 +570,135 @@ export const submitRetailerReport = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+export const viewReportImage = async (req, res) => {
+  try {
+    const { reportId, imageIndex } = req.params;
+
+    const report = await EmployeeReport.findById(reportId);
+    if (!report) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+
+    const img = report.images[imageIndex];
+    if (!img || !img.data) {
+      return res.status(404).json({ message: "Image not found" });
+    }
+
+    res.setHeader("Content-Type", img.contentType);
+    return res.end(img.data);
+
+  } catch (err) {
+    console.error("View report image error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+export const viewBillCopy = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+
+    const report = await EmployeeReport.findById(reportId);
+    if (!report || !report.billCopy?.data) {
+      return res.status(404).json({ message: "Bill copy not found" });
+    }
+
+    res.setHeader("Content-Type", report.billCopy.contentType);
+    return res.end(report.billCopy.data);
+
+  } catch (err) {
+    console.error("View bill copy error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+export const getRetailerReports = async (req, res) => {
+  try {
+    const retailerId = req.user.id;  // retailer extracted from JWT
+
+    const { campaignId, fromDate, toDate } = req.query;
+
+    // --------------------------
+    // Build Filter
+    // --------------------------
+    const filter = { retailerId };
+
+    if (campaignId) filter.campaignId = campaignId;
+
+    if (fromDate || toDate) {
+      filter.createdAt = {};
+      if (fromDate) filter.createdAt.$gte = new Date(fromDate);
+      if (toDate) filter.createdAt.$lte = new Date(toDate);
+    }
+
+    // --------------------------
+    // Fetch Reports (NO lean())
+    // --------------------------
+    const reports = await EmployeeReport.find(filter)
+      .populate("employeeId", "name phone email position")
+      .populate("campaignId", "name type client")
+      .populate("retailerId", "name uniqueId retailerCode shopDetails contactNo")
+      .populate("visitScheduleId", "visitDate status visitType")
+      .sort({ createdAt: -1 });
+
+    if (!reports.length) {
+      return res.status(200).json({
+        message: "No reports found for this retailer",
+        totalReports: 0,
+        reports: []
+      });
+    }
+
+    // --------------------------
+    // Convert images → base64
+    // --------------------------
+    const finalReports = reports.map(r => ({
+      ...r.toObject(),
+
+      // Campaign Info
+      campaignName: r.campaignId?.name || "",
+      campaignType: r.campaignId?.type || "",
+      clientName: r.campaignId?.client || "",
+
+      // Employee Info (if employee filled)
+      employeeName: r.employeeId?.name || "",
+      employeePhone: r.employeeId?.phone || "",
+      employeeEmail: r.employeeId?.email || "",
+      employeePosition: r.employeeId?.position || "",
+
+      // Retailer Info
+      retailerName: r.retailerId?.name || "",
+      retailerUniqueId: r.retailerId?.uniqueId || "",
+      retailerCode: r.retailerId?.retailerCode || "",
+      shopName: r.retailerId?.shopDetails?.shopName || "",
+
+      // Visit Info
+      visitDate: r.visitScheduleId?.visitDate || "",
+      visitStatus: r.visitScheduleId?.status || "",
+      visitType: r.visitScheduleId?.visitType || "",
+
+      // Images in Base64
+      images: r.images?.map(img => ({
+        fileName: img.fileName,
+        contentType: img.contentType,
+        base64: img.data?.toString("base64") || null
+      })) || [],
+
+      // Bill Copy in Base64
+      billCopy: r.billCopy?.data
+        ? {
+            fileName: r.billCopy.fileName,
+            contentType: r.billCopy.contentType,
+            base64: r.billCopy.data.toString("base64")
+          }
+        : null
+    }));
+
+    return res.status(200).json({
+      message: "Retailer reports fetched successfully",
+      totalReports: finalReports.length,
+      reports: finalReports
+    });
+
+  } catch (error) {
+    console.error("Error fetching retailer reports:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
