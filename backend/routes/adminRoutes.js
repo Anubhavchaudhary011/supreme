@@ -81,7 +81,7 @@ router.post(
   protect,
   upload.fields([
     { name: "images", maxCount: 10 },   // multiple images
-    { name: "billCopy", maxCount: 1 }   // single bill copy
+    { name: "billCopy", maxCount: 10}   // single bill copy
   ]),
   createAdminReport
 );
@@ -91,7 +91,7 @@ router.put(
   protect,
   upload.fields([
     { name: "images", maxCount: 20 },
-    { name: "billCopy", maxCount: 1 }
+    { name: "billCopy", maxCount: 20 }  // <-- MULTIPLE BILL COPIES ALLOWED
   ]),
   updateEmployeeReport
 );
