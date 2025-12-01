@@ -8,7 +8,7 @@ import {
    submitEmployeeReport,
    getEmployeeReports,
     getEmployeeVisitProgress,
-     downloadEmployeeReportsExcel,
+    
    getEmployeeProfile
 } from "../controllers/employeeController.js";
 import { protect } from "../middleware/authMiddleware.js";
