@@ -7,8 +7,7 @@ import {
   
    submitEmployeeReport,
    getEmployeeReports,
-     downloadEmployeeReport,
-     getEmployeeVisitProgress,
+    getEmployeeVisitProgress,
      downloadEmployeeReportsExcel,
    getEmployeeProfile
 } from "../controllers/employeeController.js";
