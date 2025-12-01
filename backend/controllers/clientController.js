@@ -184,3 +184,196 @@ export const getAllEmployeeReportsForClient = async (req, res) => {
   }
 };
 
+/* ===========================
+   GET ALL CAMPAIGNS FOR CLIENT
+=========================== */
+export const getClientCampaigns = async (req, res) => {
+  try {
+    const { role, id: userId } = req.user;
+
+    if (!["client_admin", "client_user"].includes(role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    let organizationName;
+
+    // Admin login → get organizationName
+    if (role === "client_admin") {
+      const admin = await ClientAdmin.findById(userId);
+      if (!admin) return res.status(404).json({ message: "Client Admin not found" });
+      organizationName = admin.organizationName;
+    }
+
+    // Client user login → inherit organizationName
+    if (role === "client_user") {
+      const user = await ClientUser.findById(userId).populate("parentClientAdmin");
+      if (!user || !user.parentClientAdmin)
+        return res.status(404).json({ message: "Parent Client Admin not found" });
+
+      organizationName = user.parentClientAdmin.organizationName;
+    }
+
+    if (!organizationName) {
+      return res.status(404).json({ message: "Organization name not found" });
+    }
+
+    // Fetch campaigns belonging to client (organization)
+    const campaigns = await Campaign.find({ client: organizationName })
+      .select(
+        "name type regions states isActive assignedRetailers campaignStartDate campaignEndDate createdAt"
+      )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Add outlet count
+    const enrichedCampaigns = campaigns.map((campaign) => {
+      const totalOutletsAssigned = campaign.assignedRetailers?.length || 0;
+
+      const totalOutletsAccepted = campaign.assignedRetailers?.filter(
+        (r) => r.status === "accepted"
+      ).length || 0;
+
+      return {
+        ...campaign,
+        totalOutletsAssigned,
+        totalOutletsAccepted,
+      };
+    });
+
+    return res.status(200).json({
+      message: "Client campaigns fetched successfully",
+      totalCampaigns: enrichedCampaigns.length,
+      campaigns: enrichedCampaigns,
+    });
+  } catch (err) {
+    console.error("Client campaign fetch error:", err);
+    return res.status(500).json({
+      message: "Server error",
+      error: err.message,
+    });
+  }
+};
+export const getClientCampaignPayments = async (req, res) => {
+  try {
+    const { role, id: userId } = req.user;
+
+    if (!["client_admin", "client_user"].includes(role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    /* ==========================================================
+       1️⃣ FETCH CLIENT ORGANIZATION & STATES
+    ========================================================== */
+
+    let organizationName;
+    let allowedStates = [];
+
+    if (role === "client_admin") {
+      const admin = await ClientAdmin.findById(userId);
+      if (!admin) return res.status(404).json({ message: "Client Admin not found" });
+
+      organizationName = admin.organizationName;
+      allowedStates = admin.states || [];   // ✔ Using your existing "states"
+    }
+
+    if (role === "client_user") {
+      const user = await ClientUser.findById(userId).populate("parentClientAdmin");
+      if (!user || !user.parentClientAdmin)
+        return res.status(404).json({ message: "Client Admin not found" });
+
+      organizationName = user.parentClientAdmin.organizationName;
+      allowedStates = user.parentClientAdmin.states || [];
+    }
+
+    if (!organizationName) {
+      return res.status(404).json({ message: "Organization not found" });
+    }
+
+    /* ==========================================================
+       2️⃣ FETCH CAMPAIGNS FOR THIS CLIENT + STATE FILTER
+    ========================================================== */
+
+    const campaignFilter = {
+      client: organizationName,
+    };
+
+    if (allowedStates.length > 0) {
+      campaignFilter.states = { $in: allowedStates };
+    }
+
+    const campaigns = await Campaign.find(campaignFilter).lean();
+
+    if (!campaigns.length) {
+      return res.status(200).json({
+        message: "No campaigns found for your organization/states",
+        campaigns: [],
+        payments: [],
+      });
+    }
+
+    const campaignIds = campaigns.map((c) => c._id);
+
+    /* ==========================================================
+       3️⃣ FETCH PAYMENTS FOR THESE CAMPAIGNS
+    ========================================================== */
+
+    const payments = await Payment.find({ campaign: { $in: campaignIds } })
+      .populate("retailer", "name contactNo shopDetails")
+      .populate("campaign", "name client states type")
+      .lean();
+
+    /* ==========================================================
+       4️⃣ COUNT OUTLETS ENROLLED PER CAMPAIGN
+    ========================================================== */
+
+    const outletCounts = {};
+
+    campaigns.forEach((c) => {
+      outletCounts[c._id] = c.assignedRetailers?.length || 0;
+    });
+
+    /* ==========================================================
+       5️⃣ FORMAT RESPONSE
+    ========================================================== */
+
+    const formatted = payments.map((p) => ({
+      paymentId: p._id,
+
+      // Campaign details
+      campaignId: p.campaign?._id,
+      campaignName: p.campaign?.name,
+      campaignType: p.campaign?.type,
+      campaignStates: p.campaign?.states,
+      totalOutletsEnrolled: outletCounts[p.campaign?._id] || 0,
+
+      // Retailer details
+      retailerId: p.retailer?._id,
+      retailerName: p.retailer?.name,
+      retailerContact: p.retailer?.contactNo,
+      retailerCity: p.retailer?.shopDetails?.shopAddress?.city,
+      retailerState: p.retailer?.shopDetails?.shopAddress?.state,
+
+      // Payment details
+      totalAmount: p.totalAmount,
+      amountPaid: p.amountPaid,
+      remainingAmount: p.remainingAmount,
+      paymentStatus: p.paymentStatus,
+      utrNumbers: p.utrNumbers,
+
+      lastUpdated: p.updatedAt,
+    }));
+
+    return res.status(200).json({
+      message: "Client campaign payments fetched successfully",
+      totalPayments: formatted.length,
+      payments: formatted,
+    });
+
+  } catch (err) {
+    console.error("Client payment fetch error:", err);
+    res.status(500).json({
+      message: "Server error",
+      error: err.message,
+    });
+  }
+};
