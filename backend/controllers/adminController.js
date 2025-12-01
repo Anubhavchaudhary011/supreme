@@ -1411,18 +1411,32 @@ export const updateEmployeeReport = async (req, res) => {
       });
     }
 
-    // Allowed fields to update
+    // Allowed fields to update (visitType REMOVED)
     const fields = [
-      "visitType", "attended", "notVisitedReason", "otherReasonText",
-      "reportType", "frequency", "fromDate", "toDate", "extraField",
-      "stockType", "brand", "product", "sku", "productType", "quantity",
+      "attended", 
+      "notVisitedReason", 
+      "otherReasonText",
+      "reportType", 
+      "frequency", 
+      "fromDate", 
+      "toDate", 
+      "extraField",
+      "stockType", 
+      "brand", 
+      "product", 
+      "sku", 
+      "productType", 
+      "quantity",
       "location"
     ];
+
+    // Ensure req.body exists
+    if (!req.body) req.body = {};
 
     fields.forEach(field => {
       if (req.body[field] !== undefined) {
 
-        // Fix: location must be parsed if sent as string
+        // Parse location JSON when needed
         if (field === "location") {
           try {
             report.location =
@@ -1459,7 +1473,7 @@ export const updateEmployeeReport = async (req, res) => {
 
     await report.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Report updated successfully",
       report
     });
