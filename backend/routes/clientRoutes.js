@@ -4,7 +4,9 @@ import {
   loginClientAdmin,
   loginClientUser,
   clientSetPaymentPlan,
-  getAllEmployeeReportsForClient
+  getAllEmployeeReportsForClient,
+   getClientCampaigns,
+   getClientCampaignPayments
 } from "../controllers/clientController.js";
 
 const router = express.Router();
@@ -12,6 +14,7 @@ const router = express.Router();
 // CLIENT LOGIN
 router.post("/admin/login", loginClientAdmin);
 router.post("/user/login", loginClientUser);
+router.get("/client/campaigns", protect, getClientCampaigns);
 
 // CLIENT PAYMENT PLAN
 router.post("/campaigns/payment", protect, clientSetPaymentPlan);
@@ -20,4 +23,6 @@ router.get(
   protect,
   getAllEmployeeReportsForClient
 );
+router.get("/client/payments", protect, getClientCampaignPayments);
+
 export default router;
