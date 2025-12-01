@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ClientAdmin, ClientUser, Campaign, Payment ,EmployeeReport } from "../models/user.js";
-
+import mongoose from "mongoose";
 /* ===========================
    CLIENT ADMIN LOGIN
 =========================== */
