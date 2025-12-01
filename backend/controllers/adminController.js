@@ -1401,17 +1401,17 @@ export const updateEmployeeReport = async (req, res) => {
       return res.status(404).json({ message: "Report not found" });
     }
 
-    // Permission: admin OR employee who submitted it
+    // Only admin or the employee who created it
     const isAdmin = req.user.role === "admin";
     const isOwner = req.user.id === report.submittedByEmployee?.toString();
 
     if (!isAdmin && !isOwner) {
-      return res.status(403).json({
-        message: "You do not have permission to update this report"
-      });
+      return res.status(403).json({ message: "Permission denied" });
     }
 
-    // Allowed fields to update
+    // Make sure req.body exists
+    const body = req.body || {};
+
     const fields = [
       "visitType", "attended", "notVisitedReason", "otherReasonText",
       "reportType", "frequency", "fromDate", "toDate", "extraField",
@@ -1420,51 +1420,44 @@ export const updateEmployeeReport = async (req, res) => {
     ];
 
     fields.forEach(field => {
-      // ✅ FIX: Allow empty strings (to clear fields) and check if key exists
-      if (req.body.hasOwnProperty(field)) {
-        
-        // Fix: location must be parsed if sent as string
+      if (Object.prototype.hasOwnProperty.call(body, field)) {
+
         if (field === "location") {
           try {
             report.location =
-              typeof req.body.location === "string"
-                ? JSON.parse(req.body.location)
-                : req.body.location;
-          } catch (err) {
-            console.error("Invalid location JSON");
+              typeof body.location === "string"
+                ? JSON.parse(body.location)
+                : body.location;
+          } catch {
+            console.log("Invalid location JSON");
           }
         } else {
-          // ✅ Allow empty strings to clear the field
-          report[field] = req.body[field];
+          report[field] = body[field];
         }
       }
     });
 
-    // ✅ Handle image removal
-    if (req.body.removedImageIndices) {
+    // --- Remove old images ----
+    if (body.removedImageIndices) {
       try {
-        const indicesToRemove = JSON.parse(req.body.removedImageIndices);
-        if (Array.isArray(indicesToRemove) && report.images) {
-          report.images = report.images.filter((_, idx) => !indicesToRemove.includes(idx));
-        }
-      } catch (err) {
-        console.error("Error parsing removedImageIndices:", err);
+        const removeList = JSON.parse(body.removedImageIndices);
+        report.images = report.images.filter((_, i) => !removeList.includes(i));
+      } catch {
+        console.log("Invalid removedImageIndices");
       }
     }
 
-    // ✅ Add new images (append to existing)
+    // --- Add NEW images ---
     if (req.files?.images?.length > 0) {
       const newImages = req.files.images.map(img => ({
         data: img.buffer,
         contentType: img.mimetype,
         fileName: img.originalname
       }));
-      
-      // Append to existing images
       report.images = [...(report.images || []), ...newImages];
     }
 
-    // Update bill copy ONLY if uploaded
+    // --- Update bill copy if uploaded ---
     if (req.files?.billCopy?.length > 0) {
       const file = req.files.billCopy[0];
       report.billCopy = {
@@ -1476,17 +1469,11 @@ export const updateEmployeeReport = async (req, res) => {
 
     await report.save();
 
-    res.status(200).json({
-      message: "Report updated successfully",
-      report
-    });
+    res.status(200).json({ message: "Report updated", report });
 
   } catch (error) {
     console.error("Update report error:", error);
-    return res.status(500).json({
-      message: "Server error",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
