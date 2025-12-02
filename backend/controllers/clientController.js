@@ -199,15 +199,14 @@ export const getClientCampaigns = async (req, res) => {
   try {
     // ✅ FIXED: Access req.user.role and req.user.id
     const { role, id: userId } = req.user;
-
     console.log("📊 Campaigns - User ID:", userId, "Role:", role);
-
+    
     if (!["client_admin", "client_user"].includes(role)) {
       return res.status(403).json({ message: "Access denied" });
     }
-
+    
     let organizationName;
-
+    
     // Admin login → get organizationName
     if (role === "client_admin") {
       const admin = await ClientAdmin.findById(userId);
@@ -215,62 +214,209 @@ export const getClientCampaigns = async (req, res) => {
       organizationName = admin.organizationName;
       console.log("✅ Admin org:", organizationName);
     }
-
+    
     // Client user login → inherit organizationName
     if (role === "client_user") {
       const user = await ClientUser.findById(userId).populate("parentClientAdmin");
       if (!user || !user.parentClientAdmin)
         return res.status(404).json({ message: "Parent Client Admin not found" });
-
+      
       organizationName = user.parentClientAdmin.organizationName;
       console.log("✅ User org:", organizationName);
     }
-
+    
     if (!organizationName) {
       return res.status(404).json({ message: "Organization name not found" });
     }
-
-    // Fetch campaigns belonging to client (organization)
+    
+    // Fetch campaigns with populated retailers and employees
     const campaigns = await Campaign.find({ client: organizationName })
       .select(
-        "name type regions states isActive assignedRetailers campaignStartDate campaignEndDate createdAt"
+        "name type regions states isActive assignedRetailers assignedEmployees assignedEmployeeRetailers campaignStartDate campaignEndDate createdAt"
       )
+      .populate({
+        path: "assignedRetailers.retailerId",
+        select: "name contactNo email shopDetails.shopName shopDetails.shopAddress shopDetails.businessType retailerCode uniqueId"
+      })
+      .populate({
+        path: "assignedEmployees.employeeId",
+        select: "name email phone position employeeId isActive"
+      })
+      .populate({
+        path: "assignedEmployeeRetailers.employeeId",
+        select: "name email phone employeeId"
+      })
+      .populate({
+        path: "assignedEmployeeRetailers.retailerId",
+        select: "name contactNo shopDetails.shopName retailerCode"
+      })
       .sort({ createdAt: -1 })
       .lean();
-
+    
     console.log("📊 Found campaigns:", campaigns.length);
-
-    // Add outlet count
+    
+    // Enrich campaigns with detailed information
     const enrichedCampaigns = campaigns.map((campaign) => {
+      // ===== RETAILER STATISTICS =====
       const totalOutletsAssigned = campaign.assignedRetailers?.length || 0;
-
+      
       const totalOutletsAccepted = campaign.assignedRetailers?.filter(
         (r) => r.status === "accepted"
       ).length || 0;
-
+      
+      const totalOutletsPending = campaign.assignedRetailers?.filter(
+        (r) => r.status === "pending"
+      ).length || 0;
+      
+      const totalOutletsRejected = campaign.assignedRetailers?.filter(
+        (r) => r.status === "rejected"
+      ).length || 0;
+      
+      // ===== EMPLOYEE STATISTICS =====
+      const totalEmployeesAssigned = campaign.assignedEmployees?.length || 0;
+      
+      const totalEmployeesAccepted = campaign.assignedEmployees?.filter(
+        (e) => e.status === "accepted"
+      ).length || 0;
+      
+      const totalEmployeesPending = campaign.assignedEmployees?.filter(
+        (e) => e.status === "pending"
+      ).length || 0;
+      
+      // ===== DETAILED RETAILER LIST =====
+      const retailers = campaign.assignedRetailers?.map(r => ({
+        retailerId: r.retailerId?._id,
+        retailerName: r.retailerId?.name,
+        retailerCode: r.retailerId?.retailerCode,
+        uniqueId: r.retailerId?.uniqueId,
+        contactNo: r.retailerId?.contactNo,
+        email: r.retailerId?.email,
+        shopName: r.retailerId?.shopDetails?.shopName,
+        businessType: r.retailerId?.shopDetails?.businessType,
+        city: r.retailerId?.shopDetails?.shopAddress?.city,
+        state: r.retailerId?.shopDetails?.shopAddress?.state,
+        pincode: r.retailerId?.shopDetails?.shopAddress?.pincode,
+        status: r.status,
+        assignedAt: r.assignedAt,
+        startDate: r.startDate,
+        endDate: r.endDate
+      })) || [];
+      
+      // ===== DETAILED EMPLOYEE LIST =====
+      const employees = campaign.assignedEmployees?.map(e => ({
+        employeeId: e.employeeId?._id,
+        employeeName: e.employeeId?.name,
+        employeeCode: e.employeeId?.employeeId,
+        email: e.employeeId?.email,
+        phone: e.employeeId?.phone,
+        position: e.employeeId?.position,
+        isActive: e.employeeId?.isActive,
+        status: e.status,
+        assignedAt: e.assignedAt,
+        startDate: e.startDate,
+        endDate: e.endDate
+      })) || [];
+      
+      // ===== EMPLOYEE-RETAILER MAPPING =====
+      const employeeRetailerMapping = campaign.assignedEmployeeRetailers?.map(mapping => ({
+        employeeId: mapping.employeeId?._id,
+        employeeName: mapping.employeeId?.name,
+        employeeCode: mapping.employeeId?.employeeId,
+        employeePhone: mapping.employeeId?.phone,
+        
+        retailerId: mapping.retailerId?._id,
+        retailerName: mapping.retailerId?.name,
+        retailerCode: mapping.retailerId?.retailerCode,
+        shopName: mapping.retailerId?.shopDetails?.shopName,
+        retailerContact: mapping.retailerId?.contactNo,
+        
+        assignedAt: mapping.assignedAt
+      })) || [];
+      
+      // ===== GROUP RETAILERS BY EMPLOYEE =====
+      const employeeWiseRetailers = {};
+      employeeRetailerMapping.forEach(mapping => {
+        const empId = mapping.employeeId;
+        if (!employeeWiseRetailers[empId]) {
+          employeeWiseRetailers[empId] = {
+            employeeId: mapping.employeeId,
+            employeeName: mapping.employeeName,
+            employeeCode: mapping.employeeCode,
+            retailers: []
+          };
+        }
+        employeeWiseRetailers[empId].retailers.push({
+          retailerId: mapping.retailerId,
+          retailerName: mapping.retailerName,
+          retailerCode: mapping.retailerCode,
+          shopName: mapping.shopName,
+          assignedAt: mapping.assignedAt
+        });
+      });
+      
+      // ===== GROUP EMPLOYEES BY RETAILER =====
+      const retailerWiseEmployees = {};
+      employeeRetailerMapping.forEach(mapping => {
+        const retId = mapping.retailerId;
+        if (!retailerWiseEmployees[retId]) {
+          retailerWiseEmployees[retId] = {
+            retailerId: mapping.retailerId,
+            retailerName: mapping.retailerName,
+            retailerCode: mapping.retailerCode,
+            shopName: mapping.shopName,
+            employees: []
+          };
+        }
+        retailerWiseEmployees[retId].employees.push({
+          employeeId: mapping.employeeId,
+          employeeName: mapping.employeeName,
+          employeeCode: mapping.employeeCode,
+          assignedAt: mapping.assignedAt
+        });
+      });
+      
       return {
         ...campaign,
+        
+        // Statistics
         totalOutletsAssigned,
         totalOutletsAccepted,
+        totalOutletsPending,
+        totalOutletsRejected,
+        
+        totalEmployeesAssigned,
+        totalEmployeesAccepted,
+        totalEmployeesPending,
+        
+        // Detailed Lists
+        retailers,
+        employees,
+        
+        // Mappings
+        employeeRetailerMapping,
+        employeeWiseRetailers: Object.values(employeeWiseRetailers),
+        retailerWiseEmployees: Object.values(retailerWiseEmployees),
+        
+        // Total Mappings
+        totalEmployeeRetailerMappings: employeeRetailerMapping.length
       };
     });
-
-    console.log("✅ Sample campaign:", enrichedCampaigns[0]);
-
+    
+    console.log("✅ Sample enriched campaign:", enrichedCampaigns[0]);
+    
     return res.status(200).json({
       message: "Client campaigns fetched successfully",
       totalCampaigns: enrichedCampaigns.length,
       campaigns: enrichedCampaigns,
     });
   } catch (err) {
-    console.error("Client campaign fetch error:", err);
+    console.error("❌ Client campaign fetch error:", err);
     return res.status(500).json({
       message: "Server error",
       error: err.message,
     });
   }
 };
-
 /* ============================================================
    GET CLIENT CAMPAIGN PAYMENTS
 ============================================================ */
