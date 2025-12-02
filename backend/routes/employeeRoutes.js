@@ -55,7 +55,7 @@ router.post(
   protect,
   upload.fields([
     { name: "images", maxCount: 20 },
-    { name: "billCopy", maxCount: 1 }
+    { name: "billCopy", maxCount: 5 }
   ]),
   submitEmployeeReport
 );
