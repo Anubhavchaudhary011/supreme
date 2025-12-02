@@ -2906,7 +2906,7 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
     // -----------------------------------------------
     const reports = await EmployeeReport.find(filter)
       .populate("retailerId", "name uniqueId retailerCode contactNo shopDetails")
-      .populate("employeeId", "name phone email position")
+      .populate("employeeId", "name phone email position employeeId") // 👈 Added employeeId field
       .populate("campaignId", "name type client")
       .populate("visitScheduleId", "visitDate status visitType")
       .sort({ createdAt: -1 });
@@ -2955,6 +2955,9 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       employeeEmail: r.employeeId?.email || "",
       employeePosition: r.employeeId?.position || "",
 
+      // 🔥 Added employee's unique auto-generated ID
+      employeeUniqueId: r.employeeId?.employeeId || "",
+
       // Retailer info
       retailerName: r.retailerId?.name || "",
       retailerUniqueId: r.retailerId?.uniqueId || "",
@@ -2976,7 +2979,7 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       visitStatus: r.visitScheduleId?.status || "",
       visitType: r.visitScheduleId?.visitType || "",
 
-      // Fields exactly matching your frontend
+      // Report fields
       reportType: r.reportType || "",
       frequency: r.frequency || "",
       stockType: r.stockType || "",
@@ -2989,8 +2992,7 @@ export const adminGetRetailerReportsInCampaign = async (req, res) => {
       attended: r.attended || "",
       notVisitedReason: r.notVisitedReason || "",
       otherReasonText: r.otherReasonText || "",
-      extraField: r.extraField || "", // frontend expects report.extraField
-
+      extraField: r.extraField || "",
       submittedByRole: r.submittedByRole || "",
     }));
 
