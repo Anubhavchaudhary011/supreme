@@ -16,18 +16,23 @@ export const applyToJob = async (req, res) => {
     const resumeFile = req.file;
 
     // Basic validation
-    if (!fullName || !email || !jobId)
+    if (!fullName || !email || !jobId) {
       return res.status(400).json({
         message: "Full name, email, and job ID are required",
       });
+    }
 
-    if (!resumeFile)
-      return res.status(400).json({ message: "Resume file is required" });
+    if (!resumeFile) {
+      return res.status(400).json({
+        message: "Resume file is required",
+      });
+    }
 
     // Fetch job
     const job = await Job.findById(jobId);
-    if (!job || !job.isActive)
+    if (!job || !job.isActive) {
       return res.status(404).json({ message: "Job not found or inactive" });
+    }
 
     // Create or update candidate
     let candidate = await CareerApplication.findOne({ email });
@@ -59,6 +64,7 @@ export const applyToJob = async (req, res) => {
       await candidate.save();
     }
 
+    // Safety check
     if (!candidate?._id) {
       return res.status(500).json({
         message: "Candidate creation failed.",
@@ -71,10 +77,11 @@ export const applyToJob = async (req, res) => {
       job: job._id,
     });
 
-    if (existingApp)
-      return res
-        .status(400)
-        .json({ message: "You have already applied for this job." });
+    if (existingApp) {
+      return res.status(400).json({
+        message: "You have already applied for this job.",
+      });
+    }
 
     // Create new application
     const newApplication = await JobApplication.create({
@@ -85,21 +92,52 @@ export const applyToJob = async (req, res) => {
       currentRound: 0,
     });
 
-    // SUCCESS RESPONSE WITHOUT EMAIL
+    /* -------------------------------------------
+       ✉️ SEND EMAIL TO APPLICANT (Nodemailer)
+    ---------------------------------------------*/
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,  // careers@conceptpromotions.in (or Gmail)
+        pass: process.env.EMAIL_PASS,  // Gmail App Password
+      },
+    });
+
+    const applicantHtml = `
+      <h3>Hello ${fullName},</h3>
+      <p>Thank you for applying for the position of <strong>${job.title}</strong> at Concept Promotions.</p>
+      <p>Your application has been received and is currently under review by our HR team.</p>
+
+      <h4>Your Application Summary:</h4>
+      <p><strong>Job Title:</strong> ${job.title}</p>
+      <p><strong>Location:</strong> ${job.location}</p>
+      <p><strong>Date Applied:</strong> ${new Date().toLocaleDateString()}</p>
+
+      <br/>
+      <p>Regards,<br/>Concept Promotions Careers Team</p>
+    `;
+
+    await transporter.sendMail({
+      from: `"Concept Promotions Careers" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: `Application Received - ${job.title}`,
+      html: applicantHtml,
+    });
+
+    // Success response
     return res.status(201).json({
-      message: "Application submitted successfully.",
+      message: "Application submitted successfully. Confirmation email sent.",
       applicationId: newApplication._id,
     });
 
   } catch (err) {
-    console.error("❌ Error in applyToJob:", err);
+    console.error(" Error in applyToJob:", err);
     return res.status(500).json({
       message: "Internal server error",
       error: err.message,
     });
   }
 };
-;
 
 
 /* ============================================================
