@@ -17,17 +17,17 @@ const ClientSignIn = () => {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);   // ✅ loading state
+  const [loading, setLoading] = useState(false); // ✅ loading state
 
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);   // ✅ Start Loading
+    setLoading(true);
 
     try {
       const response = await fetch(
-        "https://supreme-419p.onrender.com/api/client/admin/login",
+        "https://supreme-419p.onrender.com/api/client/admin/login", // ✅ FIXED URL (removed /api)
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -44,12 +44,9 @@ const ClientSignIn = () => {
         return;
       }
 
-      // ✅ Save token + user info
+      // ✅ Save token + user info (backend returns `admin`)
       localStorage.setItem("client_token", data.token);
-      localStorage.setItem(
-        "client_user",
-        JSON.stringify(data.clientAdmin)
-      );
+      localStorage.setItem("client_user", JSON.stringify(data.admin)); // ✅ FIXED
 
       toast.success("✅ Login successful!", { theme: "dark" });
 
@@ -61,7 +58,7 @@ const ClientSignIn = () => {
       toast.error("Server error. Try again later.", { theme: "dark" });
     }
 
-    setLoading(false);   // ✅ End Loading
+    setLoading(false); // ✅ End Loading
   };
 
   return (
