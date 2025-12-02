@@ -8,7 +8,7 @@ import retailerRoutes from "./routes/retailerRoutes.js";
 import employeeRoutes from "./routes/employeeRoutes.js";
 import clientRoutes from "./routes/clientRoutes.js";
 import careerRoutes from "./routes/careerRoutes.js"; // ✅ added
-
+import contactRoutes from "./routes/contactUsRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -38,7 +38,7 @@ app.use("/api/retailer", retailerRoutes);
 app.use("/api/employee", employeeRoutes);
 app.use("/api/client", clientRoutes);
 app.use("/api/career", careerRoutes); // ✅ Career API
-
+app.use("/api/contact", contactRoutes);
 // ===== Health Check =====
 app.get("/", (req, res) => {
   res.status(200).send("Supreme Backend API is running");
