@@ -397,7 +397,7 @@ export const submitEmployeeReport = async (req, res) => {
     const {
       campaignId,
       retailerId,
-      visitScheduleId,  // optional (employee can send or auto-match)
+      visitScheduleId,
       visitType,
       attended,
       notVisitedReason,
@@ -430,7 +430,6 @@ export const submitEmployeeReport = async (req, res) => {
     if (visitScheduleId) {
       schedule = await VisitSchedule.findById(visitScheduleId);
     } else {
-      // Match today's schedule automatically
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
 
@@ -447,7 +446,7 @@ export const submitEmployeeReport = async (req, res) => {
     }
 
     /* =======================================================
-       🔥 2. UPDATE SCHEDULE STATUS BASED ON REPORT
+       🔥 2. UPDATE SCHEDULE STATUS
     ======================================================= */
 
     let updatedStatus = "No Schedule Found";
@@ -456,19 +455,14 @@ export const submitEmployeeReport = async (req, res) => {
       if (attended === "Yes") {
         schedule.status = "Completed";
       } else {
-        // Mark as Missed or Cancelled
         const cancellationReasons = ["Closed", "Out of Stock", "Owner Not Available"];
-
-        if (cancellationReasons.includes(notVisitedReason)) {
-          schedule.status = "Cancelled";
-        } else {
-          schedule.status = "Missed";
-        }
+        schedule.status = cancellationReasons.includes(notVisitedReason)
+          ? "Cancelled"
+          : "Missed";
       }
 
       schedule.notes = `Status auto-updated from report on ${new Date().toLocaleString()}`;
       await schedule.save();
-
       updatedStatus = schedule.status;
     }
 
@@ -480,7 +474,7 @@ export const submitEmployeeReport = async (req, res) => {
       employeeId,
       campaignId,
       retailerId,
-      visitScheduleId: schedule?._id || null,  // Link report → schedule
+      visitScheduleId: schedule?._id || null,
       visitType,
       attended,
       notVisitedReason,
@@ -500,14 +494,19 @@ export const submitEmployeeReport = async (req, res) => {
         latitude: Number(latitude) || null,
         longitude: Number(longitude) || null,
       },
+
+      // set role for now (if employee always submitting)
+      submittedByRole: "Employee",
+      submittedByEmployee: employeeId,
     });
 
     /* =======================================================
-       🔥 4. HANDLE IMAGES
+       🔥 4. HANDLE IMAGES + MULTIPLE BILL COPIES
     ======================================================= */
 
     const files = req.files || {};
 
+    // MULTIPLE IMAGES
     if (files.images) {
       report.images = files.images.map((file) => ({
         data: file.buffer,
@@ -516,13 +515,13 @@ export const submitEmployeeReport = async (req, res) => {
       }));
     }
 
-    if (files.billCopy && files.billCopy[0]) {
-      const file = files.billCopy[0];
-      report.billCopy = {
+    // ✅ MULTIPLE BILL COPIES (UPDATED)
+    if (files.billCopy) {
+      report.billCopies = files.billCopy.map((file) => ({
         data: file.buffer,
         contentType: file.mimetype,
         fileName: file.originalname,
-      };
+      }));
     }
 
     await report.save();
@@ -535,17 +534,18 @@ export const submitEmployeeReport = async (req, res) => {
       message: "Report submitted successfully",
       visitScheduleStatusUpdated: updatedStatus,
       linkedVisitScheduleId: schedule?._id || "None",
-      report
+      report,
     });
 
   } catch (error) {
     console.error("Submit report error:", error);
     res.status(500).json({
       message: "Server error",
-      error: error.message
+      error: error.message,
     });
   }
 };
+
 
 export const getEmployeeReports = async (req, res) => {
   try {
@@ -556,9 +556,27 @@ export const getEmployeeReports = async (req, res) => {
       .populate("campaignId", "name type")
       .sort({ createdAt: -1 });
 
+    const formattedReports = reports.map((report) => ({
+      ...report._doc,
+
+      // Convert images array
+      images: report.images?.map(img => ({
+        fileName: img.fileName,
+        contentType: img.contentType,
+        base64: img.data.toString("base64"),
+      })) || [],
+
+      // Convert MULTIPLE bill copies
+      billCopies: report.billCopies?.map(bill => ({
+        fileName: bill.fileName,
+        contentType: bill.contentType,
+        base64: bill.data.toString("base64"),
+      })) || [],
+    }));
+
     res.status(200).json({
       message: "Reports fetched successfully",
-      reports,
+      reports: formattedReports,
     });
 
   } catch (error) {
