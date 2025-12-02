@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { ClientAdmin, ClientUser, Campaign, Payment ,EmployeeReport } from "../models/user.js";
+import { ClientAdmin, ClientUser, Campaign, Payment, EmployeeReport } from "../models/user.js";
 import mongoose from "mongoose";
+
 /* ===========================
    CLIENT ADMIN LOGIN
 =========================== */
@@ -61,7 +62,7 @@ export const clientSetPaymentPlan = async (req, res) => {
     const campaign = await Campaign.findById(campaignId);
     if (!campaign) return res.status(404).json({ message: "Campaign not found" });
 
-    // Check if user is client
+    // Check if user is client - ✅ FIXED: use req.user.role
     if (!["client_admin", "client_user"].includes(req.user.role)) {
       return res.status(403).json({ message: "Only client admins or users can set payments" });
     }
@@ -72,7 +73,7 @@ export const clientSetPaymentPlan = async (req, res) => {
       return res.status(400).json({ message: "Retailer not assigned to this campaign" });
     }
 
-    // Create payment
+    // Create payment - ✅ FIXED: use req.user.id
     const payment = await Payment.create({
       retailer: retailerId,
       campaign: campaignId,
@@ -80,7 +81,7 @@ export const clientSetPaymentPlan = async (req, res) => {
       amountPaid: 0,
       remainingAmount: totalAmount,
       paymentStatus: "Pending",
-      lastUpdatedBy: req.user._id,
+      lastUpdatedBy: req.user.id,
       notes,
     });
 
@@ -90,17 +91,22 @@ export const clientSetPaymentPlan = async (req, res) => {
   }
 };
 
-
+/* ===========================
+   GET ALL EMPLOYEE REPORTS FOR CLIENT
+=========================== */
 export const getAllEmployeeReportsForClient = async (req, res) => {
   try {
+    // ✅ FIXED: Access req.user.role and req.user.id
     const { role, id: userId } = req.user;
+
+    console.log("📊 Reports - User ID:", userId, "Role:", role);
 
     if (!["client_admin", "client_user"].includes(role)) {
       return res.status(403).json({ message: "Access denied" });
     }
 
     /* ======================================================
-       1️ GET ORGANIZATION NAME
+       1️⃣ GET ORGANIZATION NAME
     ====================================================== */
 
     let orgName;
@@ -109,6 +115,7 @@ export const getAllEmployeeReportsForClient = async (req, res) => {
       const admin = await ClientAdmin.findById(userId);
       if (!admin) return res.status(404).json({ message: "Client Admin not found" });
       orgName = admin.organizationName;
+      console.log("✅ Admin org:", orgName);
     }
 
     if (role === "client_user") {
@@ -116,10 +123,11 @@ export const getAllEmployeeReportsForClient = async (req, res) => {
       if (!user) return res.status(404).json({ message: "Client User not found" });
       orgName = user.parentClientAdmin?.organizationName;
       if (!orgName) return res.status(404).json({ message: "Organization not found" });
+      console.log("✅ User org:", orgName);
     }
 
     /* ======================================================
-       2️ GET ALL CAMPAIGN IDs FOR THIS ORGANIZATION
+       2️⃣ GET ALL CAMPAIGN IDs FOR THIS ORGANIZATION
     ====================================================== */
 
     const campaigns = await Campaign.find({ client: orgName }).select("_id");
@@ -134,7 +142,7 @@ export const getAllEmployeeReportsForClient = async (req, res) => {
     }
 
     /* ======================================================
-       3️ APPLY OPTIONAL FILTERS
+       3️⃣ APPLY OPTIONAL FILTERS
     ====================================================== */
 
     const { employeeId, retailerId, campaignId, fromDate, toDate } = req.query;
@@ -158,7 +166,7 @@ export const getAllEmployeeReportsForClient = async (req, res) => {
     }
 
     /* ======================================================
-       4️FETCH REPORTS
+       4️⃣ FETCH REPORTS
     ====================================================== */
 
     const reports = await EmployeeReport.find(filter)
@@ -189,7 +197,10 @@ export const getAllEmployeeReportsForClient = async (req, res) => {
 =========================== */
 export const getClientCampaigns = async (req, res) => {
   try {
+    // ✅ FIXED: Access req.user.role and req.user.id
     const { role, id: userId } = req.user;
+
+    console.log("📊 Campaigns - User ID:", userId, "Role:", role);
 
     if (!["client_admin", "client_user"].includes(role)) {
       return res.status(403).json({ message: "Access denied" });
@@ -202,6 +213,7 @@ export const getClientCampaigns = async (req, res) => {
       const admin = await ClientAdmin.findById(userId);
       if (!admin) return res.status(404).json({ message: "Client Admin not found" });
       organizationName = admin.organizationName;
+      console.log("✅ Admin org:", organizationName);
     }
 
     // Client user login → inherit organizationName
@@ -211,6 +223,7 @@ export const getClientCampaigns = async (req, res) => {
         return res.status(404).json({ message: "Parent Client Admin not found" });
 
       organizationName = user.parentClientAdmin.organizationName;
+      console.log("✅ User org:", organizationName);
     }
 
     if (!organizationName) {
@@ -224,6 +237,8 @@ export const getClientCampaigns = async (req, res) => {
       )
       .sort({ createdAt: -1 })
       .lean();
+
+    console.log("📊 Found campaigns:", campaigns.length);
 
     // Add outlet count
     const enrichedCampaigns = campaigns.map((campaign) => {
@@ -240,6 +255,8 @@ export const getClientCampaigns = async (req, res) => {
       };
     });
 
+    console.log("✅ Sample campaign:", enrichedCampaigns[0]);
+
     return res.status(200).json({
       message: "Client campaigns fetched successfully",
       totalCampaigns: enrichedCampaigns.length,
@@ -253,12 +270,16 @@ export const getClientCampaigns = async (req, res) => {
     });
   }
 };
+
 /* ============================================================
-   NEW: GET CLIENT CAMPAIGN PAYMENTS (FULL REWRITE)
+   GET CLIENT CAMPAIGN PAYMENTS
 ============================================================ */
 export const getClientCampaignPayments = async (req, res) => {
   try {
+    // ✅ FIXED: Access req.user.role and req.user.id
     const { role, id: userId } = req.user;
+
+    console.log("💰 Payments - User ID:", userId, "Role:", role);
 
     if (!["client_admin", "client_user"].includes(role)) {
       return res.status(403).json({ message: "Access denied" });
@@ -274,6 +295,7 @@ export const getClientCampaignPayments = async (req, res) => {
       if (!admin) return res.status(404).json({ message: "Client Admin not found" });
 
       organizationName = admin.organizationName;
+      console.log("✅ Admin org:", organizationName);
     }
 
     if (role === "client_user") {
@@ -284,6 +306,7 @@ export const getClientCampaignPayments = async (req, res) => {
       }
 
       organizationName = user.parentClientAdmin.organizationName;
+      console.log("✅ User org:", organizationName);
     }
 
     /* ----------------------------------------------------------
@@ -302,7 +325,7 @@ export const getClientCampaignPayments = async (req, res) => {
     const campaignIds = campaigns.map((c) => c._id);
 
     /* ----------------------------------------------------------
-       3️⃣ Fetch ALL Payments (NO FILTERS)
+       3️⃣ Fetch ALL Payments
     ---------------------------------------------------------- */
     const payments = await Payment.find({
       campaign: { $in: campaignIds }
@@ -312,8 +335,10 @@ export const getClientCampaignPayments = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    console.log("💰 Found payments:", payments.length);
+
     /* ----------------------------------------------------------
-       4️⃣ Prepare Counts (Optional)
+       4️⃣ Prepare Counts
     ---------------------------------------------------------- */
     const outletCountByCampaign = {};
     const acceptedOutletsByCampaign = {};
@@ -329,7 +354,7 @@ export const getClientCampaignPayments = async (req, res) => {
     });
 
     /* ----------------------------------------------------------
-       5️⃣ Format Final Output (Added shopName)
+       5️⃣ Format Final Output
     ---------------------------------------------------------- */
     const formatted = payments.map((p) => ({
       paymentId: p._id,
@@ -342,7 +367,7 @@ export const getClientCampaignPayments = async (req, res) => {
       /* Retailer Info */
       retailerId: p.retailer?._id,
       retailerName: p.retailer?.name,
-      retailerShopName: p.retailer?.shopDetails?.shopName || "",   // ⭐ ADDED
+      retailerShopName: p.retailer?.shopDetails?.shopName || "",
       retailerContact: p.retailer?.contactNo,
       retailerCity: p.retailer?.shopDetails?.shopAddress?.city,
       retailerState: p.retailer?.shopDetails?.shopAddress?.state,
@@ -382,12 +407,14 @@ export const getClientCampaignPayments = async (req, res) => {
 
 /* ============================================================
    GET UNIQUE OUTLETS WHO SUBMITTED REPORTS
-   (For a specific client's campaigns OR a single campaign)
 ============================================================ */
 export const getClientReportedOutlets = async (req, res) => {
   try {
+    // ✅ FIXED: Access req.user.role and req.user.id
     const { role, id: userId } = req.user;
-    const { campaignId } = req.query; // optional filtering
+    const { campaignId } = req.query;
+
+    console.log("🏪 Reported Outlets - User ID:", userId, "Role:", role);
 
     if (!["client_admin", "client_user"].includes(role)) {
       return res.status(403).json({ message: "Access denied" });
@@ -402,6 +429,7 @@ export const getClientReportedOutlets = async (req, res) => {
       const admin = await ClientAdmin.findById(userId);
       if (!admin) return res.status(404).json({ message: "Client Admin not found" });
       organizationName = admin.organizationName;
+      console.log("✅ Admin org:", organizationName);
     }
 
     if (role === "client_user") {
@@ -410,6 +438,7 @@ export const getClientReportedOutlets = async (req, res) => {
         return res.status(404).json({ message: "Parent Client Admin not found" });
 
       organizationName = user.parentClientAdmin.organizationName;
+      console.log("✅ User org:", organizationName);
     }
 
     /* ---------------------------------------------------------
@@ -431,6 +460,8 @@ export const getClientReportedOutlets = async (req, res) => {
         outlets: []
       });
     }
+
+    console.log("🏪 Checking outlets for campaigns:", campaignIds.length);
 
     /* ---------------------------------------------------------
        3️⃣ FETCH UNIQUE RETAILERS WHO HAVE REPORTS
@@ -468,6 +499,8 @@ export const getClientReportedOutlets = async (req, res) => {
         }
       }
     ]);
+
+    console.log("✅ Found outlets:", outlets.length);
 
     return res.status(200).json({
       message: "Unique reported outlets fetched successfully",
