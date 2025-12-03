@@ -978,3 +978,64 @@ export const getEmployeeProfile = async (req, res) => {
     });
   }
 };
+export const getAssignedRetailersForEmployee = async (req, res) => {
+  try {
+    const employeeId = req.user.id;
+    const { campaignId } = req.query; // optional filter
+
+    // Build query
+    const query = {
+      "assignedEmployeeRetailers.employeeId": employeeId
+    };
+
+    if (campaignId) {
+      query._id = campaignId;
+    }
+
+    // Fetch campaigns and populate retailers
+    const campaigns = await Campaign.find(query)
+      .populate("assignedEmployeeRetailers.retailerId", "name contactNo shopDetails")
+      .populate("assignedEmployees.employeeId", "name email phone")
+      .select("name type assignedEmployeeRetailers");
+
+    if (!campaigns.length) {
+      return res.status(200).json({
+        message: "No assigned retailers found for this employee",
+        campaigns: []
+      });
+    }
+
+    // Format response
+    const result = campaigns.map(camp => {
+      const retailers = camp.assignedEmployeeRetailers
+        .filter(r => r.employeeId.toString() === employeeId)
+        .map(r => ({
+          retailerId: r.retailerId?._id,
+          name: r.retailerId?.name,
+          contactNo: r.retailerId?.contactNo,
+          shopDetails: r.retailerId?.shopDetails,
+          assignedAt: r.assignedAt
+        }));
+
+      return {
+        campaignId: camp._id,
+        campaignName: camp.name,
+        campaignType: camp.type,
+        retailers
+      };
+    });
+
+    return res.status(200).json({
+      message: "Assigned retailers fetched successfully",
+      employeeId,
+      campaigns: result
+    });
+
+  } catch (error) {
+    console.error("Get assigned retailers error:", error);
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
