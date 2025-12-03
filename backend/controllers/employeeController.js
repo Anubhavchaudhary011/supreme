@@ -1049,37 +1049,29 @@ export const getAssignedRetailersForEmployee = async (req, res) => {
 /* ======================================================
    GET VISIT SCHEDULES FOR EMPLOYEE (Corrected Position)
 ====================================================== */
-export const getVisitSchedulesForEmployee = async (req, res) => {
+export const getAllVisitSchedulesForEmployee = async (req, res) => {
   try {
     const employeeId = req.user.id;
-    const { retailerId, campaignId } = req.query;
 
-    if (!retailerId || !campaignId) {
-      return res.status(400).json({
-        message: "retailerId and campaignId are required",
-      });
-    }
-
-    const schedules = await VisitSchedule.find({
-      employeeId,
-      retailerId,
-      campaignId,
-    })
+    const schedules = await VisitSchedule.find({ employeeId })
+      .populate("retailerId", "name shopDetails contactNo")
+      .populate("campaignId", "name type")
       .sort({ visitDate: 1 })
       .lean();
 
     return res.status(200).json({
-      message: "Visit schedules fetched successfully",
+      message: "All visit schedules fetched successfully",
       schedules,
     });
   } catch (error) {
-    console.error("Get visit schedules error:", error);
+    console.error("Get all visit schedules error:", error);
     return res.status(500).json({
       message: "Server error",
       error: error.message,
     });
   }
 };
+
 /* ======================================================
    GET LAST VISIT DETAILS
 ====================================================== */
