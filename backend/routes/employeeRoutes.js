@@ -12,7 +12,8 @@ import {
      downloadEmployeeReportsExcel,
     getEmployeeProfile,
   getAssignedRetailersForEmployee,
-   getLastVisitDetails
+   getLastVisitDetails,
+  getVisitSchedulesForEmployee
 } from "../controllers/employeeController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { upload } from "../middleware/upload.js"; 
@@ -78,5 +79,10 @@ router.get(
 
 router.get("/profile", protect, getEmployeeProfile);
 router.get("/last-visit-details", protect, getLastVisitDetails);
+router.get(
+  "/employee/visit-schedules",
+  protect,
+  getVisitSchedulesForEmployee
+);
 
 export default router;
