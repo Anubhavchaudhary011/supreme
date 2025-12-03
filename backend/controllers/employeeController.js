@@ -1145,7 +1145,7 @@ export const getLastVisitDetails = async (req, res) => {
 };
 export const getScheduleReportMapping = async (req, res) => {
   try {
-    const employeeId = req.user.id; // this can be string or ObjectId, Mongoose will cast
+    const employeeId = req.user.id;
     const { campaignId } = req.query;
 
     if (!campaignId) {
@@ -1154,45 +1154,44 @@ export const getScheduleReportMapping = async (req, res) => {
       });
     }
 
-    // Optional: validate campaignId format before querying
-    if (!mongoose.Types.ObjectId.isValid(campaignId)) {
-      return res.status(400).json({
-        message: "Invalid campaignId",
-      });
-    }
-
-    // 1️⃣ Fetch all schedules of this employee for the campaign
+    // 1️⃣ Get all schedules for this employee & campaign
     const schedules = await VisitSchedule.find({
-      employeeId,                         // Mongoose will cast to ObjectId based on schema
-      campaignId: campaignId,             // string → ObjectId cast
+      employeeId,
+      campaignId
     })
-      .populate("retailerId", "name shopDetails contactNo")
+      .populate("retailerId", "name shopDetails")
       .lean();
 
-    // 2️⃣ Fetch all reports of this employee + campaign
+    // 2️⃣ Get all reports for this employee & campaign
     const reports = await EmployeeReport.find({
-      employeeId,                         // must match what you stored in EmployeeReport
-      campaignId: campaignId,
-    }).lean();
+      employeeId,
+      campaignId
+    })
+      .populate("retailerId", "name")
+      .lean();
 
-    // 3️⃣ Create mapping: schedule._id → report
+    // 3️⃣ Map reports by retailer (NOT by scheduleId!)
     const reportMap = {};
-    reports.forEach((rep) => {
-      if (rep.visitScheduleId) {
-        reportMap[rep.visitScheduleId.toString()] = rep;
-      }
+    reports.forEach(rep => {
+      const rid = rep.retailerId?._id?.toString();
+      if (rid) reportMap[rid] = rep; // latest report per retailer
     });
 
-    // 4️⃣ Merge schedules + report
-    const mapping = schedules.map((schedule) => ({
-      schedule,
-      report: reportMap[schedule._id.toString()] || null,
-    }));
+    // 4️⃣ Build final mapping
+    const mapping = schedules.map(schedule => {
+      const rid = schedule.retailerId?._id?.toString();
+
+      return {
+        schedule,
+        report: reportMap[rid] || null, // match by retailer now
+      };
+    });
 
     return res.status(200).json({
       message: "Schedule-report mapping fetched successfully",
-      mapping,
+      mapping
     });
+
   } catch (error) {
     console.error("Mapping error:", error);
     return res.status(500).json({
