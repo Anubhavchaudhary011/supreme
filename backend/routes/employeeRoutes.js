@@ -13,7 +13,7 @@ import {
     getEmployeeProfile,
   getAssignedRetailersForEmployee,
    getLastVisitDetails,
-  getVisitSchedulesForEmployee,
+
   getAllVisitSchedulesForEmployee
 } from "../controllers/employeeController.js";
 import { protect } from "../middleware/authMiddleware.js";
