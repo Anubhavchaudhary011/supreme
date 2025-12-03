@@ -1056,6 +1056,39 @@ export const getLastVisitDetails = async (req, res) => {
         message: "retailerId and campaignId are required" 
       });
     }
+export const getVisitSchedulesForEmployee = async (req, res) => {
+  try {
+    const employeeId = req.user.id;
+    const { retailerId, campaignId } = req.query;
+
+    if (!retailerId || !campaignId) {
+      return res.status(400).json({
+        message: "retailerId and campaignId are required"
+      });
+    }
+
+    // Fetch all visit schedules assigned to this employee + retailer + campaign
+    const schedules = await VisitSchedule.find({
+      employeeId,
+      retailerId,
+      campaignId
+    })
+      .sort({ visitDate: 1 })
+      .lean();
+
+    return res.status(200).json({
+      message: "Visit schedules fetched successfully",
+      schedules,
+    });
+
+  } catch (error) {
+    console.error("Get visit schedules error:", error);
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
 
     // Find the most recent completed visit
     const lastVisit = await VisitSchedule.findOne({
