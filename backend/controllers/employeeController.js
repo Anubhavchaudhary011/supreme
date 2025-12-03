@@ -421,6 +421,13 @@ export const submitEmployeeReport = async (req, res) => {
       return res.status(400).json({ message: "campaignId and retailerId are required" });
     }
 
+    // ⭐ REQUIRED VALIDATION (Only this is added)
+    if (visitType === "scheduled" && !visitScheduleId) {
+      return res.status(400).json({
+        message: "visitScheduleId is required for scheduled visits",
+      });
+    }
+
     /* =======================================================
        🔥 1. AUTO-FIND VISIT SCHEDULE IF NOT PROVIDED
     ======================================================= */
@@ -515,7 +522,7 @@ export const submitEmployeeReport = async (req, res) => {
       }));
     }
 
-    // ✅ MULTIPLE BILL COPIES (UPDATED)
+    // MULTIPLE BILL COPIES
     if (files.billCopy) {
       report.billCopies = files.billCopy.map((file) => ({
         data: file.buffer,
