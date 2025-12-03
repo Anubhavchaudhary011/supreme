@@ -82,7 +82,7 @@ router.get("/profile", protect, getEmployeeProfile);
 router.get("/last-visit-details", protect, getLastVisitDetails);
 router.get(
   "/schedules/all",
-  protectEmployee,
+  protect,
   getAllVisitSchedulesForEmployee
 );
 
