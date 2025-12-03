@@ -10,7 +10,8 @@ import {
      downloadEmployeeReport,
      getEmployeeVisitProgress,
      downloadEmployeeReportsExcel,
-    getEmployeeProfile
+    getEmployeeProfile,
+  getAssignedRetailersForEmployee
 } from "../controllers/employeeController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { upload } from "../middleware/upload.js"; 
@@ -41,7 +42,7 @@ router.put(
   ]),
   updateEmployeeProfile
 );
-
+router.get("/assigned-retailers", protect, getAssignedRetailersForEmployee);
 // 🔹 Get assigned campaigns
 router.get("/employee/campaigns", protect, getEmployeeCampaigns);
 
