@@ -13,6 +13,7 @@ import {
     getEmployeeProfile,
   getAssignedRetailersForEmployee,
    getLastVisitDetails,
+   getScheduleReportMapping,
 
   getAllVisitSchedulesForEmployee
 } from "../controllers/employeeController.js";
@@ -84,6 +85,11 @@ router.get(
   "/schedules/all",
   protect,
   getAllVisitSchedulesForEmployee
+);
+router.get(
+  "/employee/schedule-report-mapping",
+  protect,
+  getScheduleReportMapping
 );
 
 export default router;
