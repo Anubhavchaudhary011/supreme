@@ -1039,3 +1039,73 @@ export const getAssignedRetailersForEmployee = async (req, res) => {
     });
   }
 };
+export const getLastVisitDetails = async (req, res) => {
+  try {
+    const employeeId = req.user.id;
+    const { retailerId, campaignId } = req.query;
+
+    if (!retailerId || !campaignId) {
+      return res.status(400).json({ 
+        message: "retailerId and campaignId are required" 
+      });
+    }
+
+    // Find the most recent completed visit
+    const lastVisit = await VisitSchedule.findOne({
+      employeeId,
+      retailerId,
+      campaignId,
+      status: "Completed"
+    })
+      .sort({ visitDate: -1 })
+      .populate("retailerId", "name contactNo shopDetails")
+      .lean();
+
+    // Find the next upcoming scheduled visit
+    const upcomingVisit = await VisitSchedule.findOne({
+      employeeId,
+      retailerId,
+      campaignId,
+      status: "Scheduled",
+      visitDate: { $gte: new Date() }
+    })
+      .sort({ visitDate: 1 })
+      .lean();
+
+    // Find the most recent report for this retailer/campaign
+    const lastReport = await EmployeeReport.findOne({
+      employeeId,
+      retailerId,
+      campaignId
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Format response
+    const response = {
+      retailerName: lastVisit?.retailerId?.name || "N/A",
+      lastVisit: lastVisit 
+        ? new Date(lastVisit.visitDate).toLocaleDateString()
+        : "NA",
+      upcomingVisit: upcomingVisit
+        ? new Date(upcomingVisit.visitDate).toLocaleDateString()
+        : "No upcoming visit scheduled",
+      typeOfVisit: lastReport?.visitType || "N/A",
+      attended: lastReport?.attended === "Yes",
+      reason: lastReport?.notVisitedReason || null,
+      summary: lastReport?.extraField || null
+    };
+
+    return res.status(200).json({
+      message: "Last visit details fetched successfully",
+      data: response
+    });
+
+  } catch (error) {
+    console.error("Get last visit details error:", error);
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
