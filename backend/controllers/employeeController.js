@@ -1145,7 +1145,7 @@ export const getLastVisitDetails = async (req, res) => {
 };
 export const getScheduleReportMapping = async (req, res) => {
   try {
-    const employeeId = req.user.id;
+    const employeeId = req.user.id; // this can be string or ObjectId, Mongoose will cast
     const { campaignId } = req.query;
 
     if (!campaignId) {
@@ -1154,45 +1154,50 @@ export const getScheduleReportMapping = async (req, res) => {
       });
     }
 
+    // Optional: validate campaignId format before querying
+    if (!mongoose.Types.ObjectId.isValid(campaignId)) {
+      return res.status(400).json({
+        message: "Invalid campaignId",
+      });
+    }
+
     // 1️⃣ Fetch all schedules of this employee for the campaign
     const schedules = await VisitSchedule.find({
-      employeeId,
-      campaignId
+      employeeId,                         // Mongoose will cast to ObjectId based on schema
+      campaignId: campaignId,             // string → ObjectId cast
     })
       .populate("retailerId", "name shopDetails contactNo")
       .lean();
 
     // 2️⃣ Fetch all reports of this employee + campaign
     const reports = await EmployeeReport.find({
-      employeeId,
-      campaignId
+      employeeId,                         // must match what you stored in EmployeeReport
+      campaignId: campaignId,
     }).lean();
 
     // 3️⃣ Create mapping: schedule._id → report
     const reportMap = {};
-    reports.forEach(rep => {
+    reports.forEach((rep) => {
       if (rep.visitScheduleId) {
         reportMap[rep.visitScheduleId.toString()] = rep;
       }
     });
 
     // 4️⃣ Merge schedules + report
-    const final = schedules.map(schedule => ({
+    const mapping = schedules.map((schedule) => ({
       schedule,
-      report: reportMap[schedule._id.toString()] || null
+      report: reportMap[schedule._id.toString()] || null,
     }));
 
     return res.status(200).json({
       message: "Schedule-report mapping fetched successfully",
-      mapping: final,
+      mapping,
     });
-
   } catch (error) {
     console.error("Mapping error:", error);
     return res.status(500).json({
       message: "Server error",
-      error: error.message
+      error: error.message,
     });
   }
 };
-
